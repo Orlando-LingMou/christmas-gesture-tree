@@ -16,11 +16,12 @@ const REGROUP_RESPONSE = 10;
 const SCATTER_TURN_RESPONSE = 26;
 const PHOTO_FOCUS_SPREAD = .33;
 const CROWN_HEIGHT = 4.36;
-const CROWN_EDGE_POINTS = 9;
-const CROWN_DUST_POINTS = 150;
+const CROWN_EDGE_POINTS = 10;
+const CROWN_CORE_POINTS = 235;
+const CROWN_DUST_POINTS = 205;
 const CROWN_VERTICES = Array.from({ length: 10 }, (_, index) => {
   const angle = Math.PI / 2 + index * Math.PI / 5;
-  const radius = index % 2 ? .27 : .66;
+  const radius = index % 2 ? .20 : .49;
   return [Math.cos(angle) * radius, Math.sin(angle) * radius];
 });
 
@@ -152,25 +153,41 @@ function sampleSky(index) {
   };
 }
 
-function sampleCrown(index) {
-  const outline = index < CROWN_VERTICES.length * CROWN_EDGE_POINTS;
+const crownOutlinePoints = CROWN_VERTICES.length * CROWN_EDGE_POINTS;
+
+function sampleCrown(index, dispersing = false) {
+  const outline = !dispersing && index < crownOutlinePoints;
   const edge = outline ? Math.floor(index / CROWN_EDGE_POINTS) : index % CROWN_VERTICES.length;
   const [startX, startY] = CROWN_VERTICES[edge];
   const [endX, endY] = CROWN_VERTICES[(edge + 1) % CROWN_VERTICES.length];
   const along = outline ? (index % CROWN_EDGE_POINTS) / CROWN_EDGE_POINTS : Math.random();
-  const radius = outline ? 1 : .82 + Math.random() * .33;
-  const x = (startX + (endX - startX) * along) * radius;
-  const y = (startY + (endY - startY) * along) * radius;
-  const expansion = outline ? 1.025 : 1.08 + Math.random() * .70;
+  const edgeX = startX + (endX - startX) * along;
+  const edgeY = startY + (endY - startY) * along;
+  const radius = outline ? 1 : Math.sqrt(Math.random());
+  const from = [edgeX * radius, edgeY * radius, 0];
+  let to = from;
+
+  if (dispersing) {
+    const distance = 1.25 + Math.random() ** .85 * 2;
+    const angle = Math.atan2(edgeY, edgeX) + (Math.random() - .5) * .68;
+    const reach = Math.hypot(edgeX, edgeY) * distance;
+    to = [Math.cos(angle) * reach, Math.sin(angle) * reach * .74, 0];
+  }
+
   return {
-    from: [x, y, 0],
-    to: [x * expansion, y * expansion, 0],
+    from, to,
     color: palette[index % 4 ? 0 : 2],
-    size: outline ? 2.35 + Math.random() * 1.65 : 1.15 + Math.random() * 1.05
+    size: outline ? 2.5 + Math.random() * 1.1 : 1.7 + Math.random() * 1.4
   };
 }
 
-const crownParticleCount = CROWN_VERTICES.length * CROWN_EDGE_POINTS + CROWN_DUST_POINTS;
+function crownScale(spread) {
+  return 1 + .60 * THREE.MathUtils.smoothstep(spread, 0, .86);
+}
+
+function crownBurst(spread) {
+  return THREE.MathUtils.smoothstep(spread, .55, 1);
+}
 
 function starFlareTexture() {
   const center = 128;
@@ -322,9 +339,10 @@ export function createScene(host) {
   const tree = particleField(11500, sampleTree, true);
   const crown = new THREE.Group();
   crown.position.y = CROWN_HEIGHT;
-  const crownLights = particleField(crownParticleCount, sampleCrown);
+  const crownLights = particleField(crownOutlinePoints + CROWN_CORE_POINTS, sampleCrown);
+  const crownDust = particleField(CROWN_DUST_POINTS, (index) => sampleCrown(index, true));
   const starFlare = starSprite(starFlareTexture(), .35, 3.3);
-  crown.add(starFlare, crownLights);
+  crown.add(starFlare, crownLights, crownDust);
   scene.add(sky);
   tableau.add(floor);
   cloud.add(tree, crown);
@@ -362,7 +380,7 @@ export function createScene(host) {
     homeX = framing.offsetX;
     homeY = framing.offsetY;
     cloudScale = framing.spreadScale;
-    for (const field of [sky, floor, tree, crownLights]) field.material.uniforms.pixels.value = pixelRatio;
+    for (const field of [sky, floor, tree, crownLights, crownDust]) field.material.uniforms.pixels.value = pixelRatio;
   }
   new ResizeObserver(resize).observe(host);
   resize();
@@ -444,15 +462,19 @@ export function createScene(host) {
     floor.material.uniforms.opacity.value = .68 * (1 - spread * .77);
     const shimmer = starShimmer(clock);
     starFlare.material.opacity = shimmer * (.43 + .54 * spread);
-    starFlare.scale.setScalar(2.8 + .5 * shimmer + .7 * spread);
-    crownLights.material.uniforms.opacity.value = .70 + .42 * spread;
+    const starSize = crownScale(spread);
+    crown.scale.setScalar(starSize);
+    starFlare.scale.setScalar((2.55 + .5 * shimmer + .75 * spread) / starSize);
+    crownLights.material.uniforms.opacity.value = .74 + .40 * spread;
+    crownDust.material.uniforms.opacity.value = .65 + .35 * spread;
     const turnSpeed = isScatter ? SCATTER_TURN_RESPONSE : 6;
     cloud.rotation.y = damp(cloud.rotation.y, targetY, turnSpeed, duration);
     cloud.rotation.x = damp(cloud.rotation.x, targetX, turnSpeed, duration);
     inverseRotation.copy(cloud.quaternion).invert();
     crown.quaternion.copy(inverseRotation);
-    for (const field of [sky, floor, tree, crownLights]) field.material.uniforms.time.value = clock;
+    for (const field of [sky, floor, tree, crownLights, crownDust]) field.material.uniforms.time.value = clock;
     tree.material.uniforms.spread.value = crownLights.material.uniforms.spread.value = spread;
+    crownDust.material.uniforms.spread.value = crownBurst(spread);
     for (const photo of photoGroup.children) {
       const { origin, destination, roll } = photo.userData;
       photo.position.lerpVectors(origin, destination, spread);
@@ -481,7 +503,8 @@ function createCanvasScene(host) {
   const quaternion = new THREE.Quaternion();
   const point = new THREE.Vector3();
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
-  const crownLights = makeField(crownParticleCount, sampleCrown);
+  const crownLights = makeField(crownOutlinePoints + CROWN_CORE_POINTS, sampleCrown);
+  const crownDust = makeField(CROWN_DUST_POINTS, (index) => sampleCrown(index, true));
   const flare = starFlareTexture();
   const dots = new Map(palette.map((color) => {
     const dot = document.createElement('canvas');
@@ -582,17 +605,23 @@ function createCanvasScene(host) {
     const starX = centerX + point.x * scale;
     const starY = centerY - point.y * scale;
     const shimmer = starShimmer(clock);
-    const haloSize = (2.8 + .5 * shimmer + .7 * spread) * scale;
+    const haloSize = (2.55 + .5 * shimmer + .75 * spread) * scale;
+    const starSize = crownScale(spread) * scale;
     context.globalAlpha = shimmer * (.43 + .54 * spread);
     context.drawImage(flare, starX - haloSize / 2, starY - haloSize / 2, haloSize, haloSize);
-    for (const [index, particle] of crownLights.entries()) {
-      const { from, to, size } = particle;
-      const px = starX + (from[0] + (to[0] - from[0]) * spread) * scale;
-      const py = starY - (from[1] + (to[1] - from[1]) * spread) * scale;
-      const twinkle = .76 + .24 * Math.sin(index * 2.39 + clock * 2.1);
-      context.globalAlpha = Math.min(1, twinkle * (.72 + .47 * spread));
-      dot(particle, px, py, size * (1.18 + .66 * spread));
+
+    function drawCrown(particles, expansion, brightness, size) {
+      for (const [index, particle] of particles.entries()) {
+        const { from, to } = particle;
+        const px = starX + (from[0] + (to[0] - from[0]) * expansion) * starSize;
+        const py = starY - (from[1] + (to[1] - from[1]) * expansion) * starSize;
+        const twinkle = .76 + .24 * Math.sin(index * 2.39 + clock * 2.1);
+        context.globalAlpha = Math.min(1, twinkle * brightness);
+        dot(particle, px, py, particle.size * size);
+      }
     }
+    drawCrown(crownDust, crownBurst(spread), .65 + .35 * spread, 1.10 + .44 * spread);
+    drawCrown(crownLights, 0, .74 + .40 * spread, 1.18 + .55 * spread);
     context.globalCompositeOperation = 'source-over';
     context.globalAlpha = 1;
 
