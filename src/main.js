@@ -11,6 +11,9 @@ const upload = byId('upload');
 const clear = byId('clear');
 const thumbs = byId('thumbs');
 const toggle = byId('toggle');
+const quickToggle = byId('quick-toggle');
+const controls = byId('controls');
+const tabPhotoCount = byId('tab-photo-count');
 const fullscreen = byId('fullscreen');
 const cameraButton = byId('camera');
 const viewer = byId('viewer');
@@ -49,6 +52,7 @@ try {
   feedback('stage-error', '当前浏览器无法启动 3D 场景。试试开启硬件加速，或换到最新版 Chrome、Edge 或 Safari。');
   cameraButton.disabled = true;
   toggle.disabled = true;
+  if (quickToggle) quickToggle.disabled = true;
   generate.disabled = true;
 }
 
@@ -64,6 +68,10 @@ function setMode(next) {
   byId('scene-state').textContent = scattered ? '粒子展开' : '树形';
   toggle.textContent = scattered ? '聚合成树' : '散开粒子';
   toggle.setAttribute('aria-pressed', String(scattered));
+  if (quickToggle) {
+    quickToggle.textContent = scattered ? '聚树' : '散开';
+    quickToggle.setAttribute('aria-pressed', String(scattered));
+  }
 }
 
 function showPhoto(index, fromGesture = false) {
@@ -96,6 +104,7 @@ function renderPhotos() {
   clear.hidden = !photos.length;
   upload.lastChild.textContent = photos.length ? ' 更换照片' : ' 选择照片';
   byId('count').textContent = `${photos.length} / 15`;
+  if (tabPhotoCount) tabPhotoCount.textContent = String(photos.length);
 }
 
 async function loadPhoto(file) {
@@ -335,7 +344,21 @@ host.addEventListener('lostpointercapture', (event) => {
 });
 
 cameraButton.addEventListener('click', toggleCamera);
-toggle.addEventListener('click', () => setMode(mode === 'tree' ? 'scatter' : 'tree'));
+const toggleMode = () => setMode(mode === 'tree' ? 'scatter' : 'tree');
+toggle.addEventListener('click', toggleMode);
+quickToggle?.addEventListener('click', toggleMode);
+for (const tabButton of document.querySelectorAll('.mobile-tab')) {
+  tabButton.addEventListener('click', () => {
+    const target = tabButton.dataset.tabTarget;
+    if (!target || !controls) return;
+    controls.dataset.activeTab = target;
+    for (const other of document.querySelectorAll('.mobile-tab')) {
+      const active = other === tabButton;
+      other.classList.toggle('is-active', active);
+      other.setAttribute('aria-selected', String(active));
+    }
+  });
+}
 fullscreen.addEventListener('click', () => setImmersive(!stage.classList.contains('immersive')));
 byId('close-viewer').addEventListener('click', () => viewer.close());
 byId('previous').addEventListener('click', () => showPhoto(activePhoto - 1));

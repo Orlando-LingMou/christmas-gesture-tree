@@ -48,28 +48,23 @@ export function createPresentationEffects(canvas, greeting) {
     const still = reducedMotion.matches;
     const time = still ? 0 : now / 1000;
     context.clearRect(0, 0, width, height);
+    context.imageSmoothingEnabled = false;
     context.globalCompositeOperation = 'lighter';
     night.drawAurora(context, width, height, time, presenting);
 
     for (const star of stars) {
-      const x = star.x * width;
-      const y = star.y * height + Math.sin(time * .19 + star.phase) * (star.inBand ? 8 : 3);
-      const light = .33 + .35 * (.5 + .5 * Math.sin(time * 1.6 + star.phase));
-      const size = star.size;
+      const x = Math.round(star.x * width);
+      const y = Math.round(star.y * height + Math.sin(time * .19 + star.phase) * (star.inBand ? 6 : 2));
+      const light = .36 + .42 * (.5 + .5 * Math.sin(time * 1.6 + star.phase));
+      const pixel = Math.max(2, Math.round(star.size * 1.45));
       context.fillStyle = star.color;
-      context.globalAlpha = light * .17;
-      context.beginPath();
-      context.arc(x, y, size * 2.9, 0, TAU);
-      context.fill();
       context.globalAlpha = light;
-      context.beginPath();
-      context.arc(x, y, size, 0, TAU);
-      context.fill();
+      context.fillRect(x, y, pixel, pixel);
       if (star.sparkle) {
-        const ray = size * (3.6 + light * 2);
-        context.globalAlpha = light * .52;
-        context.fillRect(x - ray, y - .42, ray * 2, .84);
-        context.fillRect(x - .42, y - ray, .84, ray * 2);
+        const arm = pixel * 2;
+        context.globalAlpha = light * .65;
+        context.fillRect(x - arm, y, pixel + arm * 2, pixel);
+        context.fillRect(x, y - arm, pixel, pixel + arm * 2);
       }
     }
 
@@ -81,10 +76,13 @@ export function createPresentationEffects(canvas, greeting) {
       for (const spark of sparks) {
         context.globalAlpha = (1 - age / 1.28) ** 1.5 * spark.opacity;
         context.fillStyle = spark.color;
-        context.beginPath();
-        context.arc(spark.x + spark.dx * travel, spark.y + spark.dy * travel + 20 * age ** 2,
-          spark.size, 0, TAU);
-        context.fill();
+        const size = Math.max(2, Math.round(spark.size * 2.2));
+        context.fillRect(
+          Math.round(spark.x + spark.dx * travel),
+          Math.round(spark.y + spark.dy * travel + 20 * age ** 2),
+          size,
+          size
+        );
       }
     }
     context.globalAlpha = 1;

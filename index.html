@@ -2,18 +2,37 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#0d0c0a">
-  <meta name="description" content="用照片和手势点亮你的粒子圣诞树。">
-  <title>圣诞星愿 · A Christmas Constellation</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#192344">
+  <meta name="description" content="星露谷冬日星像素风 3D 粒子圣诞树，用照片和手势点亮你的星夜。">
+  <title>冬日星愿 · Winter Star Tree</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
 </head>
 <body>
   <section class="auth-gate" id="auth-gate" aria-label="访问验证" hidden>
-    <div class="gate-backdrop" aria-hidden="true"></div>
-    <div class="gate-card">
-      <p class="gate-brand"><span aria-hidden="true">✦</span> 圣诞星愿</p>
-      <h1 class="gate-title">Merry <em>Christmas</em></h1>
-      <p class="gate-subtitle">此页面已加密保护，请输入访问密码</p>
+    <div class="gate-sky" aria-hidden="true"></div>
+    <div class="gate-snow" aria-hidden="true"></div>
+    <div class="gate-horizon" aria-hidden="true"></div>
+    <div class="gate-card pixel-box">
+      <div class="gate-emblem" aria-hidden="true">
+        <svg viewBox="0 0 16 16" width="44" height="44" shape-rendering="crispEdges">
+          <rect x="7" y="1" width="2" height="2" fill="#ffe98a"/>
+          <rect x="6" y="3" width="4" height="2" fill="#ffd24c"/>
+          <rect x="2" y="5" width="12" height="2" fill="#ffd24c"/>
+          <rect x="4" y="7" width="8" height="2" fill="#f5a623"/>
+          <rect x="5" y="9" width="6" height="2" fill="#f5a623"/>
+          <rect x="4" y="11" width="3" height="2" fill="#d97b16"/>
+          <rect x="9" y="11" width="3" height="2" fill="#d97b16"/>
+          <rect x="3" y="13" width="2" height="2" fill="#b85d12"/>
+          <rect x="11" y="13" width="2" height="2" fill="#b85d12"/>
+          <rect x="7" y="5" width="2" height="2" fill="#fff9d6"/>
+        </svg>
+      </div>
+      <p class="gate-brand">冬日星愿 · WINTER STAR</p>
+      <h1 class="gate-title">MERRY<br><em>CHRISTMAS</em></h1>
+      <p class="gate-subtitle">木屋已点亮壁炉，请输入通行密码进入冬日星夜</p>
       <form class="gate-form" id="gate-form" novalidate>
         <label class="sr-only" for="gate-password">访问密码</label>
         <div class="gate-field">
@@ -22,13 +41,13 @@
             type="password"
             inputmode="numeric"
             autocomplete="current-password"
-            placeholder="请输入访问密码"
+            placeholder="请输入 6 位访问密码"
             maxlength="32"
             required
           >
           <button type="button" class="gate-toggle" id="gate-toggle" aria-label="显示密码" aria-pressed="false">显示</button>
         </div>
-        <button type="submit" class="gold-button" id="gate-submit">解锁进入</button>
+        <button type="submit" class="gold-button" id="gate-submit">推开木门</button>
         <p class="gate-error" id="gate-error" role="alert" hidden></p>
       </form>
     </div>
@@ -36,14 +55,27 @@
 
   <template id="app-template">
     <main class="app">
-      <header class="header">
-        <a class="brand" href="./" aria-label="圣诞星愿首页"><span aria-hidden="true">✦</span> 圣诞星愿</a>
-        <p>照片和摄像头画面仅在本机处理</p>
+      <header class="header pixel-banner">
+        <a class="brand" href="./" aria-label="冬日星愿首页">
+          <svg class="pixel-icon" viewBox="0 0 12 12" width="22" height="22" aria-hidden="true" shape-rendering="crispEdges">
+            <rect x="5" y="0" width="2" height="2" fill="#ffe98a"/>
+            <rect x="4" y="2" width="4" height="2" fill="#ffd24c"/>
+            <rect x="1" y="4" width="10" height="2" fill="#ffd24c"/>
+            <rect x="3" y="6" width="6" height="2" fill="#f5a623"/>
+            <rect x="2" y="8" width="3" height="2" fill="#d97b16"/>
+            <rect x="7" y="8" width="3" height="2" fill="#d97b16"/>
+            <rect x="5" y="4" width="2" height="2" fill="#fff9d6"/>
+          </svg>
+          <span>冬日星愿</span>
+          <small class="brand-sub">WINTER STAR</small>
+        </a>
+        <p class="privacy-note">照片与摄像头仅在本机运行</p>
       </header>
 
       <div class="workspace">
-        <section class="stage" id="stage" aria-label="粒子圣诞树">
+        <section class="stage pixel-frame" id="stage" aria-label="像素粒子圣诞树">
           <canvas class="presentation-stars" id="presentation-stars" aria-hidden="true"></canvas>
+          <div class="stage-horizon" aria-hidden="true"></div>
           <p class="presentation-name" id="presentation-name"><span class="greeting-title">Merry Christmas</span><span class="greeting-name" id="greeting-name" hidden></span></p>
           <div class="scene" id="scene" aria-hidden="true"></div>
           <div class="title">
@@ -53,56 +85,94 @@
           <div class="photo-target" id="photo-target" aria-hidden="true" hidden></div>
           <button type="button" class="icon-button back-to-editor" id="back-to-editor" aria-label="返回编辑" title="返回编辑（Esc）" hidden>×</button>
           <div class="scene-actions">
-            <span class="state" id="scene-state" aria-live="polite">树形</span>
+            <div class="scene-actions-left">
+              <span class="state" id="scene-state" aria-live="polite">树形</span>
+              <button type="button" class="stage-pill-button" id="quick-toggle" aria-pressed="false">散开</button>
+            </div>
             <button type="button" class="icon-button" id="fullscreen" aria-label="沉浸模式" title="沉浸模式">⛶</button>
           </div>
           <p class="stage-error" id="stage-error" hidden></p>
         </section>
 
-        <aside class="controls" aria-label="操作面板">
-          <section class="panel personalize">
-            <label for="name">名字</label>
+        <nav class="mobile-tabs" aria-label="功能切换" role="tablist">
+          <button type="button" class="mobile-tab is-active" role="tab" aria-selected="true" data-tab-target="customize">
+            <svg class="pixel-icon" viewBox="0 0 12 12" width="16" height="16" aria-hidden="true" shape-rendering="crispEdges">
+              <rect x="5" y="1" width="2" height="2" fill="#ffd24c"/>
+              <rect x="4" y="3" width="4" height="2" fill="#46b868"/>
+              <rect x="3" y="5" width="6" height="2" fill="#2e8b57"/>
+              <rect x="2" y="7" width="8" height="2" fill="#237246"/>
+              <rect x="5" y="9" width="2" height="2" fill="#8c4a1f"/>
+            </svg>
+            <span>定制</span>
+          </button>
+          <button type="button" class="mobile-tab" role="tab" aria-selected="false" data-tab-target="photos">
+            <svg class="pixel-icon" viewBox="0 0 12 12" width="16" height="16" aria-hidden="true" shape-rendering="crispEdges">
+              <rect x="1" y="2" width="10" height="8" fill="#8c4a1f"/>
+              <rect x="2" y="3" width="8" height="6" fill="#f6d9a8"/>
+              <rect x="3" y="4" width="2" height="2" fill="#ffd24c"/>
+              <rect x="3" y="7" width="6" height="1" fill="#46b868"/>
+              <rect x="5" y="6" width="3" height="1" fill="#46b868"/>
+            </svg>
+            <span>照片</span>
+            <em class="tab-badge" id="tab-photo-count">0</em>
+          </button>
+          <button type="button" class="mobile-tab" role="tab" aria-selected="false" data-tab-target="gestures">
+            <svg class="pixel-icon" viewBox="0 0 12 12" width="16" height="16" aria-hidden="true" shape-rendering="crispEdges">
+              <rect x="5" y="1" width="2" height="5" fill="#ffd9a0"/>
+              <rect x="3" y="2" width="2" height="4" fill="#ffd9a0"/>
+              <rect x="7" y="2" width="2" height="4" fill="#ffd9a0"/>
+              <rect x="2" y="5" width="8" height="4" fill="#f0b97a"/>
+              <rect x="4" y="9" width="4" height="2" fill="#d99757"/>
+            </svg>
+            <span>手势</span>
+          </button>
+        </nav>
+
+        <aside class="controls" id="controls" data-active-tab="customize" aria-label="操作面板">
+          <section class="panel personalize pixel-box" data-tab-panel="customize">
+            <label for="name">祝福对象</label>
             <input id="name" type="text" maxlength="24" placeholder="输入要显示的名字" autocomplete="off">
-            <button type="button" class="gold-button" id="generate">生成圣诞树</button>
+            <button type="button" class="gold-button" id="generate">点亮冬日星树</button>
           </section>
-          <section class="panel photos">
-            <div class="panel-heading"><h2>我的照片</h2><span class="count" id="count">0 / 15</span></div>
+
+          <section class="panel photos pixel-box" data-tab-panel="photos">
+            <div class="panel-heading"><h2>记忆相册</h2><span class="count" id="count">0 / 15</span></div>
             <input id="files" type="file" accept="image/*" multiple hidden>
             <button type="button" class="upload" id="upload"><span aria-hidden="true">＋</span> 选择照片</button>
-            <p class="note" id="photo-help">一次选择 5–15 张照片，也可以拖进画面。</p>
+            <p class="note" id="photo-help">一次选择 5–15 张照片，也可直接拖入星夜画框。</p>
             <div class="thumbs" id="thumbs" aria-label="照片缩略图" hidden></div>
             <button type="button" class="text-button" id="clear" hidden>清除照片</button>
             <p class="feedback" id="photo-feedback" role="status" hidden></p>
           </section>
 
-          <section class="panel gestures">
-            <div class="panel-heading"><h2>手势控制</h2></div>
+          <section class="panel gestures pixel-box" data-tab-panel="gestures">
+            <div class="panel-heading"><h2>魔法手势</h2></div>
             <button type="button" class="gold-button" id="camera"><span aria-hidden="true">◉</span> 开启摄像头</button>
             <p class="feedback" id="camera-feedback" role="status" hidden></p>
             <p class="note" id="hand-indicator" hidden></p>
             <dl>
-              <div><dt>张开手掌</dt><dd>炸开粒子，放大照片</dd></div>
-              <div><dt>保持张手并移动</dt><dd>左右旋转场景</dd></div>
-              <div><dt>拇指和食指捏合</dt><dd>放大金框选中的照片</dd></div>
-              <div><dt>握拳</dt><dd>重新聚成圣诞树</dd></div>
+              <div><dt>张开手掌</dt><dd>炸开像素星光，展开照片</dd></div>
+              <div><dt>张手移动</dt><dd>左右旋转冬日星树</dd></div>
+              <div><dt>捏合手指</dt><dd>放大金框选中的照片</dd></div>
+              <div><dt>握拳</dt><dd>重新聚成像素圣诞树</dd></div>
             </dl>
           </section>
 
-          <section class="panel manual" aria-label="鼠标与触屏控制">
-            <div class="panel-heading"><h2>手动控制</h2></div>
+          <section class="panel manual pixel-box" data-tab-panel="customize" aria-label="鼠标与触屏控制">
+            <div class="panel-heading"><h2>手动操控</h2></div>
             <button type="button" class="outline-button" id="toggle" aria-pressed="false">散开粒子</button>
-            <p class="note">拖动画面旋转，点照片看大图。</p>
+            <p class="note">单指拖动旋转星树，点击相框查看大图。</p>
           </section>
         </aside>
       </div>
     </main>
 
-    <dialog id="viewer" aria-label="照片预览">
+    <dialog id="viewer" class="pixel-box" aria-label="照片预览">
       <div class="viewer-top"><span id="viewer-count"></span><button type="button" class="icon-button" id="close-viewer" aria-label="关闭照片">×</button></div>
       <img id="viewer-photo" alt="所选照片">
       <div class="viewer-actions">
-        <button type="button" class="outline-button" id="previous">上一张</button>
-        <button type="button" class="outline-button" id="next">下一张</button>
+        <button type="button" class="outline-button" id="previous">◀ 上一张</button>
+        <button type="button" class="outline-button" id="next">下一张 ▶</button>
       </div>
     </dialog>
   </template>
