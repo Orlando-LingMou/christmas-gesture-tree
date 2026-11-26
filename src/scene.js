@@ -140,35 +140,84 @@ function sampleSky(index) {
   };
 }
 
-function starTexture() {
+function starArtwork() {
+  const center = 128;
   const canvas = document.createElement('canvas');
-  canvas.width = 256;
-  canvas.height = 256;
+  canvas.width = canvas.height = center * 2;
   const context = canvas.getContext('2d');
-  const glow = context.createRadialGradient(128, 128, 0, 128, 128, 126);
-  glow.addColorStop(0, '#fffbe5');
-  glow.addColorStop(.12, '#ffe8aabf');
-  glow.addColorStop(.4, '#eea4424d');
-  glow.addColorStop(1, '#bd662400');
-  context.fillStyle = glow;
-  context.fillRect(0, 0, 256, 256);
-  context.beginPath();
-  for (let i = 0; i < 10; i++) {
+  const vertices = Array.from({ length: 10 }, (_, i) => {
     const angle = i * Math.PI / 5 - Math.PI / 2;
-    const radius = i % 2 === 0 ? 54 : 20;
-    context.lineTo(128 + Math.cos(angle) * radius, 128 + Math.sin(angle) * radius);
-  }
+    const radius = i % 2 ? 24 : 60;
+    return [center + Math.cos(angle) * radius, center + Math.sin(angle) * radius];
+  });
+  context.beginPath();
+  for (const [x, y] of vertices) context.lineTo(x, y);
   context.closePath();
-  context.strokeStyle = '#fff0c5';
-  context.lineWidth = 3;
-  context.fillStyle = '#ffd376';
-  context.shadowColor = '#fff6c5';
-  context.shadowBlur = 21;
-  context.fill();
+  context.shadowColor = '#ffc05a';
+  context.shadowBlur = 15;
+  context.strokeStyle = '#f9a63c';
+  context.lineWidth = 4;
   context.stroke();
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  return texture;
+  context.shadowColor = '#fff1ad';
+  context.shadowBlur = 6;
+  context.strokeStyle = '#fff4cd';
+  context.lineWidth = 1.7;
+  context.stroke();
+  for (let side = 0; side < vertices.length; side++) {
+    const [x, y] = vertices[side];
+    const [nextX, nextY] = vertices[(side + 1) % vertices.length];
+    for (let i = 0; i < 8; i++) {
+      const t = i / 8;
+      const sparkle = 1 + 1.5 * Math.abs(Math.sin(side * 11 + i * 7));
+      context.fillStyle = i % 3 ? '#ffcf79' : '#fff8d9';
+      context.beginPath();
+      context.arc(x + (nextX - x) * t, y + (nextY - y) * t, sparkle, 0, TAU);
+      context.fill();
+    }
+  }
+
+  const flare = document.createElement('canvas');
+  flare.width = flare.height = canvas.width;
+  const glow = flare.getContext('2d');
+  const halo = glow.createRadialGradient(center, center, 0, center, center, center);
+  halo.addColorStop(0, '#fff1b62c');
+  halo.addColorStop(.3, '#ffbd4337');
+  halo.addColorStop(.64, '#ff942615');
+  halo.addColorStop(1, '#ff942600');
+  glow.fillStyle = halo;
+  glow.fillRect(0, 0, flare.width, flare.height);
+  for (let ray = 0; ray < 8; ray++) {
+    const angle = ray * TAU / 8 - Math.PI / 2;
+    const x = Math.cos(angle);
+    const y = Math.sin(angle);
+    const length = ray % 2 ? 79 : 119;
+    const gradient = glow.createLinearGradient(center, center, center + x * length, center + y * length);
+    gradient.addColorStop(0, '#fff6cc00');
+    gradient.addColorStop(.23, ray % 2 ? '#ffdc8c88' : '#fff0aaa5');
+    gradient.addColorStop(1, '#ffe09c00');
+    glow.fillStyle = gradient;
+    glow.beginPath();
+    glow.moveTo(center - y * 1.45, center + x * 1.45);
+    glow.lineTo(center + x * length, center + y * length);
+    glow.lineTo(center + y * 1.45, center - x * 1.45);
+    glow.fill();
+  }
+  return { outline: canvas, flare };
+}
+
+function starSprite(image, opacity, size) {
+  const map = new THREE.CanvasTexture(image);
+  map.colorSpace = THREE.SRGBColorSpace;
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+    map, opacity, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending
+  }));
+  sprite.position.set(0, 4.25, 0);
+  sprite.scale.setScalar(size);
+  return sprite;
+}
+
+function starShimmer(time) {
+  return .66 + .29 * Math.sin(time * 2.8) + .05 * Math.sin(time * 5.6);
 }
 
 function photoCard(photo, index, amount) {
@@ -273,14 +322,12 @@ export function createScene(host) {
   floor.rotation.x = .22;
   floor.position.y = 4.44 * (1 - COMPACT_SCALE);
   const tree = particleField(11500, sampleTree, true);
-  const star = new THREE.Sprite(new THREE.SpriteMaterial({
-    map: starTexture(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending
-  }));
-  star.position.set(0, 4.25, 0);
-  star.scale.setScalar(2.45);
+  const crown = starArtwork();
+  const star = starSprite(crown.outline, 1, 2.35);
+  const starFlare = starSprite(crown.flare, .72, 3.3);
   scene.add(sky);
   tableau.add(floor);
-  cloud.add(tree, star);
+  cloud.add(tree, starFlare, star);
   const raycaster = new THREE.Raycaster();
   const cardDepth = new THREE.Vector3();
   const inverseRotation = new THREE.Quaternion();
@@ -323,7 +370,8 @@ export function createScene(host) {
 
   function setMode(next) {
     mode = next;
-    if (mode === 'tree') targetX = 0;
+    targetX = 0;
+    if (mode === 'scatter') cloud.rotation.x = 0;
   }
 
   function setPhotos(photos) {
@@ -339,12 +387,11 @@ export function createScene(host) {
 
   function drag(dx, dy) {
     targetY += dx * .009;
-    targetX = clamp(targetX + dy * .007, -.55, .55);
+    if (mode === 'tree') targetX = clamp(targetX + dy * .007, -.55, .55);
   }
 
-  function steer(dx, dy) {
+  function steer(dx) {
     targetY += dx * 4.6;
-    targetX = clamp(targetX + dy * 1.85, -.62, .62);
   }
 
   function pick(clientX, clientY) {
@@ -392,10 +439,12 @@ export function createScene(host) {
     }
     spread = damp(spread, isScatter ? 1 : 0, motion, duration);
     tableau.position.x = damp(tableau.position.x, isScatter ? 0 : homeX, motion, duration);
-    tableau.position.y = damp(tableau.position.y, homeY, motion, duration);
+    tableau.position.y = damp(tableau.position.y, isScatter ? 0 : homeY, motion, duration);
     cloud.scale.setScalar(COMPACT_SCALE + (cloudScale - COMPACT_SCALE) * spread);
     floor.material.uniforms.opacity.value = .68 * (1 - spread * .77);
-    star.material.opacity = 1;
+    const shimmer = starShimmer(clock);
+    starFlare.material.opacity = shimmer;
+    starFlare.scale.setScalar(3.08 + .61 * shimmer);
     const turnSpeed = isScatter ? 15 : 6;
     cloud.rotation.y = damp(cloud.rotation.y, targetY, turnSpeed, duration);
     cloud.rotation.x = damp(cloud.rotation.x, targetX, turnSpeed, duration);
@@ -430,7 +479,7 @@ function createCanvasScene(host) {
   const quaternion = new THREE.Quaternion();
   const point = new THREE.Vector3();
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
-  const star = starTexture().image;
+  const crown = starArtwork();
   const dots = new Map(palette.map((color) => {
     const dot = document.createElement('canvas');
     dot.width = dot.height = 24;
@@ -491,7 +540,7 @@ function createCanvasScene(host) {
     quaternion.setFromEuler(rotation);
     const { units, offsetX, offsetY, spreadScale } = stageFraming(width, height, presenting);
     const centerX = width / 2 + offsetX * units * (1 - spread);
-    const centerY = height / 2 - offsetY * units;
+    const centerY = height / 2 - offsetY * units * (1 - spread);
     const scale = units * (COMPACT_SCALE + (spreadScale - COMPACT_SCALE) * spread);
 
     context.setTransform(ratio, 0, 0, ratio, 0, 0);
@@ -527,8 +576,15 @@ function createCanvasScene(host) {
     }
     context.globalAlpha = 1;
     point.set(0, 4.25, 0).applyQuaternion(quaternion);
-    context.drawImage(star, centerX + (point.x - 1.23) * scale,
-      centerY - (point.y + 1.23) * scale, 2.46 * scale, 2.46 * scale);
+    const starX = centerX + point.x * scale;
+    const starY = centerY - point.y * scale;
+    const shimmer = starShimmer(clock);
+    const haloSize = (3.08 + .61 * shimmer) * scale;
+    const starSize = 2.35 * scale;
+    context.globalAlpha = shimmer;
+    context.drawImage(crown.flare, starX - haloSize / 2, starY - haloSize / 2, haloSize, haloSize);
+    context.globalAlpha = 1;
+    context.drawImage(crown.outline, starX - starSize / 2, starY - starSize / 2, starSize, starSize);
     context.globalCompositeOperation = 'source-over';
     context.globalAlpha = 1;
 
@@ -553,7 +609,8 @@ function createCanvasScene(host) {
   return {
     setMode(next) {
       mode = next;
-      if (mode === 'tree') targetX = 0;
+      targetX = 0;
+      if (mode === 'scatter') x = 0;
     },
     setPresentation(enabled) {
       presenting = enabled;
@@ -564,11 +621,10 @@ function createCanvasScene(host) {
     },
     drag(dx, dy) {
       targetY += dx * .009;
-      targetX = clamp(targetX + dy * .007, -.55, .55);
+      if (mode === 'tree') targetX = clamp(targetX + dy * .007, -.55, .55);
     },
-    steer(dx, dy) {
+    steer(dx) {
       targetY += dx * 4.6;
-      targetX = clamp(targetX + dy * 1.85, -.62, .62);
     },
     pick(clientX, clientY) {
       const bounds = canvas.getBoundingClientRect();

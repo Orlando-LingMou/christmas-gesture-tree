@@ -1,6 +1,7 @@
 import './style.css';
 import { createScene } from './scene.js';
 import { createHandMotion } from './gestures.js';
+import { createPresentationEffects } from './presentation.js';
 
 const byId = (id) => document.getElementById(id);
 const stage = byId('stage');
@@ -20,6 +21,7 @@ const generate = byId('generate');
 const backToEditor = byId('back-to-editor');
 const photoTarget = byId('photo-target');
 const handMotion = createHandMotion();
+const effects = createPresentationEffects(byId('presentation-stars'), byId('presentation-name'));
 
 let scene;
 let photos = [];
@@ -51,7 +53,9 @@ try {
 }
 
 function setMode(next) {
-  if (mode !== next) handMotion.reset();
+  if (mode === next && stage.dataset.mode) return;
+  if (presenting && next === 'scatter') effects.burstGreeting();
+  handMotion.reset();
   mode = next;
   stage.dataset.mode = mode;
   scene?.setMode(mode);
@@ -177,7 +181,7 @@ function updateHand(hand, change, timestamp) {
   const canRotate = mode === 'scatter' && !viewer.open && !pointer;
   if (canRotate) {
     const movement = handMotion.move(hand, timestamp);
-    if (movement) scene.steer(movement.x, movement.y);
+    if (movement) scene.steer(movement);
   } else {
     handMotion.reset();
   }
@@ -261,6 +265,7 @@ function setPresentation(enabled) {
   stage.classList.toggle('presentation-view', enabled);
   backToEditor.hidden = !enabled;
   scene?.setPresentation(enabled);
+  effects.setVisible(enabled);
   displayTarget();
   if (enabled) {
     setMode('tree');
@@ -318,7 +323,11 @@ host.addEventListener('pointermove', (event) => {
 });
 host.addEventListener('pointerup', (event) => {
   if (pointer?.id !== event.pointerId) return;
-  if (pointer.distance <= 4) showPhoto(scene?.pick(event.clientX, event.clientY));
+  if (pointer.distance <= 4) {
+    const pickedPhoto = scene?.pick(event.clientX, event.clientY);
+    if (pickedPhoto !== undefined) showPhoto(pickedPhoto);
+    else if (presenting) setMode(mode === 'tree' ? 'scatter' : 'tree');
+  }
   pointer = undefined;
 });
 host.addEventListener('lostpointercapture', (event) => {

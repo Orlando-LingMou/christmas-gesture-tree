@@ -84,12 +84,10 @@ export function createHandMotion() {
     }
 
     // Keep tiny changes buffered, so gradual movement still turns the scene.
-    const step = (delta) => Math.sign(delta) * Math.max(0, Math.abs(delta) - deadZone);
-    const x = step(dx);
-    const y = step(dy);
-    anchor.x += x;
-    anchor.y += y;
-    return x || y ? { x, y } : null;
+    const movement = Math.sign(dx) * Math.max(0, Math.abs(dx) - deadZone);
+    anchor.x += movement;
+    anchor.y = hand.y;
+    return movement;
   }
 
   return { move, reset };
