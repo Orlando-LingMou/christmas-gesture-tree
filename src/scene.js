@@ -16,8 +16,7 @@ const REGROUP_RESPONSE = 10;
 const SCATTER_TURN_RESPONSE = 26;
 const PHOTO_FOCUS_SPREAD = .33;
 const CROWN_HEIGHT = 4.36;
-const CROWN_EDGE_POINTS = 10;
-const CROWN_CORE_POINTS = 235;
+const CROWN_BODY_POINTS = 335;
 const CROWN_DUST_POINTS = 205;
 const CROWN_VERTICES = Array.from({ length: 10 }, (_, index) => {
   const angle = Math.PI / 2 + index * Math.PI / 5;
@@ -153,17 +152,14 @@ function sampleSky(index) {
   };
 }
 
-const crownOutlinePoints = CROWN_VERTICES.length * CROWN_EDGE_POINTS;
-
 function sampleCrown(index, dispersing = false) {
-  const outline = !dispersing && index < crownOutlinePoints;
-  const edge = outline ? Math.floor(index / CROWN_EDGE_POINTS) : index % CROWN_VERTICES.length;
+  const edge = index % CROWN_VERTICES.length;
   const [startX, startY] = CROWN_VERTICES[edge];
   const [endX, endY] = CROWN_VERTICES[(edge + 1) % CROWN_VERTICES.length];
-  const along = outline ? (index % CROWN_EDGE_POINTS) / CROWN_EDGE_POINTS : Math.random();
+  const along = Math.random();
   const edgeX = startX + (endX - startX) * along;
   const edgeY = startY + (endY - startY) * along;
-  const radius = outline ? 1 : Math.sqrt(Math.random());
+  const radius = Math.sqrt(Math.random());
   const from = [edgeX * radius, edgeY * radius, 0];
   let to = from;
 
@@ -177,7 +173,7 @@ function sampleCrown(index, dispersing = false) {
   return {
     from, to,
     color: palette[index % 4 ? 0 : 2],
-    size: outline ? 2.5 + Math.random() * 1.1 : 1.7 + Math.random() * 1.4
+    size: 1.7 + Math.random() * 1.4
   };
 }
 
@@ -339,7 +335,7 @@ export function createScene(host) {
   const tree = particleField(11500, sampleTree, true);
   const crown = new THREE.Group();
   crown.position.y = CROWN_HEIGHT;
-  const crownLights = particleField(crownOutlinePoints + CROWN_CORE_POINTS, sampleCrown);
+  const crownLights = particleField(CROWN_BODY_POINTS, sampleCrown);
   const crownDust = particleField(CROWN_DUST_POINTS, (index) => sampleCrown(index, true));
   const starFlare = starSprite(starFlareTexture(), .35, 3.3);
   crown.add(starFlare, crownLights, crownDust);
@@ -503,7 +499,7 @@ function createCanvasScene(host) {
   const quaternion = new THREE.Quaternion();
   const point = new THREE.Vector3();
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
-  const crownLights = makeField(crownOutlinePoints + CROWN_CORE_POINTS, sampleCrown);
+  const crownLights = makeField(CROWN_BODY_POINTS, sampleCrown);
   const crownDust = makeField(CROWN_DUST_POINTS, (index) => sampleCrown(index, true));
   const flare = starFlareTexture();
   const dots = new Map(palette.map((color) => {
