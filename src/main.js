@@ -1,5 +1,6 @@
 import './style.css';
 import { createScene } from './scene.js';
+import { createHandMotion } from './gestures.js';
 
 const byId = (id) => document.getElementById(id);
 const stage = byId('stage');
@@ -18,6 +19,7 @@ const nameInput = byId('name');
 const generate = byId('generate');
 const backToEditor = byId('back-to-editor');
 const photoTarget = byId('photo-target');
+const handMotion = createHandMotion();
 
 let scene;
 let photos = [];
@@ -49,6 +51,7 @@ try {
 }
 
 function setMode(next) {
+  if (mode !== next) handMotion.reset();
   mode = next;
   stage.dataset.mode = mode;
   scene?.setMode(mode);
@@ -124,7 +127,7 @@ async function loadPhotos(selected) {
       photos.forEach((photo) => URL.revokeObjectURL(photo.url));
       photos = decoded;
       renderPhotos();
-      feedback('photo-feedback', `已添加 ${photos.length} 张。张开手掌或点「散开粒子」查看。`);
+      feedback('photo-feedback', `已挂上 ${photos.length} 张。张开手掌或点「散开粒子」，让照片向外展开。`);
     } catch (error) {
       decoded.forEach((photo) => URL.revokeObjectURL(photo.url));
       console.error(error);
@@ -145,7 +148,10 @@ function setCameraState(next) {
     off: ' 开启摄像头', loading: ' 取消开启', on: ' 关闭摄像头'
   }[next];
   handIndicator.hidden = next !== 'on';
-  if (next !== 'on') displayTarget();
+  if (next !== 'on') {
+    handMotion.reset();
+    displayTarget();
+  }
 }
 
 function displayTarget(target) {
@@ -158,7 +164,7 @@ function displayTarget(target) {
   photoTarget.style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%) rotate(${-roll}rad)`;
 }
 
-function updateHand(hand, change) {
+function updateHand(hand, change, timestamp) {
   if (change === 'fist') {
     if (viewer.open) viewer.close();
     setMode('tree');
@@ -168,8 +174,15 @@ function updateHand(hand, change) {
     setMode('scatter');
   }
 
+  const canRotate = mode === 'scatter' && !viewer.open && !pointer;
+  if (canRotate) {
+    const movement = handMotion.move(hand, timestamp);
+    if (movement) scene.steer(movement.x, movement.y);
+  } else {
+    handMotion.reset();
+  }
+
   const canSelect = hand && mode === 'scatter' && !viewer.open;
-  if (canSelect && hand.pose === 'open' && !pointer) scene.steer(hand.x, hand.y);
   if (!canSelect) {
     displayTarget();
   } else if (hand.pose !== 'pinch' || !selectedTarget) {
@@ -233,11 +246,12 @@ function setImmersive(enabled) {
 
 function updateName() {
   const name = nameInput.value.trim();
-  for (const id of ['editor-name', 'presentation-name']) {
-    const label = byId(id);
-    label.textContent = name;
-    label.hidden = !name;
-  }
+  const editorName = byId('editor-name');
+  editorName.textContent = name;
+  editorName.hidden = !name;
+  const greetingName = byId('greeting-name');
+  greetingName.textContent = name;
+  greetingName.hidden = !name;
 }
 
 function setPresentation(enabled) {
@@ -290,6 +304,7 @@ stage.addEventListener('drop', (event) => {
 host.addEventListener('pointerdown', (event) => {
   if (pointer || event.button !== 0) return;
   host.setPointerCapture(event.pointerId);
+  handMotion.reset();
   pointer = { id: event.pointerId, x: event.clientX, y: event.clientY, distance: 0 };
 });
 host.addEventListener('pointermove', (event) => {

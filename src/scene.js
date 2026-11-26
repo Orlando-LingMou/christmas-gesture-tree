@@ -5,8 +5,12 @@ const TAU = Math.PI * 2;
 const clamp = THREE.MathUtils.clamp;
 const damp = THREE.MathUtils.damp;
 
-const palette = ['#ffd385', '#ffb54d', '#ffecb4', '#c48035', '#ffe3a7', '#a76b31', '#598565', '#f08b59']
-  .map((color) => new THREE.Color(color));
+const palette = [
+  '#ffd385', '#ffb54d', '#ffecb4', '#c48035', '#ffe3a7', '#a76b31',
+  '#36d88d', '#159659', '#70ef9d', '#ff425d', '#d72b42', '#ff7884'
+].map((color) => new THREE.Color(color));
+const foliage = [6, 7, 8, 9, 6, 7, 10, 0, 8, 9, 7, 11].map((index) => palette[index]);
+const COMPACT_SCALE = .78;
 
 function particleField(amount, sample, animated = false) {
   const positions = [];
@@ -53,7 +57,8 @@ function particleField(amount, sample, animated = false) {
         vTone = tone;
         vec4 mv = modelViewMatrix * vec4(p, 1.);
         gl_Position = projectionMatrix * mv;
-        gl_PointSize = pixels * size * (.9 + shimmer * .17) * (1. + .24 * spread);
+        float outlineGlow = (1. - step(.01, distance(position, dispersed))) * drift * .30;
+        gl_PointSize = pixels * size * (.9 + shimmer * .17) * (1. + (.24 + outlineGlow) * spread);
       }`,
     fragmentShader: `
       uniform float opacity;
@@ -78,34 +83,39 @@ function sampleTree(index) {
   const height = Math.random();
   const cone = 3.05 * Math.pow(1 - height, .87);
   const tier = 1 - .24 * ((height * 6) % 1);
-  const radius = cone * tier * (.35 + .65 * Math.sqrt(Math.random()));
+  const outline = index % 7 === 0;
+  const garland = index % 9 === 0;
+  const trunk = index % 20 === 1;
+  const radius = cone * tier * (outline ? .95 : .35 + .65 * Math.sqrt(Math.random()));
   let from = [Math.cos(angle) * radius, height * 7.6 - 3.7, Math.sin(angle) * radius];
-  let color = palette[index % palette.length];
-  let size = 1.9 + Math.random() * 2.8;
+  let color = foliage[index % foliage.length];
+  let size = 2 + Math.random() * 2.7;
 
-  if (index % 9 === 0) {
+  if (garland) {
     const ribbon = height * TAU * 5 + (Math.random() - .5) * .19;
     from = [Math.cos(ribbon) * cone, from[1], Math.sin(ribbon) * cone];
-    color = palette[index % 3];
-    size *= 1.4;
+    color = palette[index % 2 === 0 ? 0 : 2];
+    size *= 1.38;
   }
-  if (index % 20 === 1) {
-    const trunk = Math.sqrt(Math.random()) * .36;
-    from = [Math.cos(angle) * trunk, -4.28 + height * .8, Math.sin(angle) * trunk];
+  if (trunk) {
+    const trunkRadius = Math.sqrt(Math.random()) * .36;
+    from = [Math.cos(angle) * trunkRadius, -4.28 + height * .8, Math.sin(angle) * trunkRadius];
     color = palette[5];
   }
   if (index % 27 === 2) {
-    color = palette[2];
-    size *= 2.35;
+    color = palette[index % 2 === 0 ? 9 : 8];
+    size *= 2.2;
   }
 
+  // Keep the outline, trunk, and some garland lights in place while the rest fan out.
   let to = from;
-  if (index % 3 === 0 && index % 9 !== 0 && index % 20 !== 1) {
-    const flight = .45 + Math.random() * 2.3;
+  if (!outline && !trunk && !(garland && index % 2 === 0)) {
+    const flight = 1.25 + Math.pow(Math.random(), .72) * 5.4;
+    const azimuth = angle + (Math.random() - .5) * 1.3;
     to = [
-      from[0] + Math.cos(angle) * flight,
-      from[1] + (Math.random() - .5) * 1.05,
-      from[2] + Math.sin(angle) * flight
+      from[0] + Math.cos(azimuth) * flight,
+      from[1] * .87 + (Math.random() - .5) * (1.6 + .40 * flight),
+      from[2] + Math.sin(azimuth) * flight
     ];
   }
   return { from, to, color, size };
@@ -188,12 +198,13 @@ function photoCard(photo, index, amount) {
 
   const angle = index * GOLDEN_ANGLE + .35;
   const heightFraction = 1 - (index + .5) / amount;
-  const y = heightFraction * 6.45 - 3.28;
-  const radius = 1.55 + 2.75 * Math.pow(1 - heightFraction, .8);
+  const y = heightFraction * 6.55 - 3.18;
+  const branchRadius = .22 + 2.85 * Math.pow(1 - heightFraction, .84);
+  const orbit = 3.25 + 2.45 * Math.pow(1 - heightFraction, .88);
   return {
     canvas, width, height: height + .23, index,
-    destination: new THREE.Vector3(Math.cos(angle) * radius, y, Math.sin(angle) * radius),
-    origin: new THREE.Vector3(Math.cos(angle) * .2, y * .68, Math.sin(angle) * .2),
+    destination: new THREE.Vector3(Math.cos(angle) * orbit, y * 1.12, Math.sin(angle) * orbit),
+    origin: new THREE.Vector3(Math.cos(angle) * branchRadius, y, Math.sin(angle) * branchRadius),
     roll: .24 * Math.sin(angle)
   };
 }
@@ -223,6 +234,10 @@ function focusTarget(cards, width, height, previous) {
   return closest;
 }
 
+function cardScale(spread, depth) {
+  return (.46 + spread * .84) * (1 + clamp(depth * .032, -.16, .16));
+}
+
 function stageFraming(width, height, presenting) {
   const aspect = width / height;
   const viewHeight = presenting ? Math.max(11.8, 7 / aspect) : aspect < .93 ? 14.7 : 11.8;
@@ -230,7 +245,7 @@ function stageFraming(width, height, presenting) {
     units: height / viewHeight,
     offsetX: presenting || aspect <= 1.2 ? 0 : Math.min(2.3, viewHeight * aspect * .10),
     offsetY: presenting ? 0 : aspect < .93 ? -1.25 : -.35,
-    spreadScale: Math.min(1, viewHeight * aspect / 11)
+    spreadScale: Math.min(1, viewHeight * aspect / 14.4)
   };
 }
 
@@ -256,6 +271,7 @@ export function createScene(host) {
   const sky = particleField(460, sampleSky);
   const floor = particleField(780, sampleFloor);
   floor.rotation.x = .22;
+  floor.position.y = 4.44 * (1 - COMPACT_SCALE);
   const tree = particleField(11500, sampleTree, true);
   const star = new THREE.Sprite(new THREE.SpriteMaterial({
     map: starTexture(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending
@@ -266,6 +282,7 @@ export function createScene(host) {
   tableau.add(floor);
   cloud.add(tree, star);
   const raycaster = new THREE.Raycaster();
+  const cardDepth = new THREE.Vector3();
   const inverseRotation = new THREE.Quaternion();
   const photoRotation = new THREE.Quaternion();
   const faceAxis = new THREE.Vector3(0, 0, 1);
@@ -325,15 +342,12 @@ export function createScene(host) {
     targetX = clamp(targetX + dy * .007, -.55, .55);
   }
 
-  // Adapted from the scatter-mode hand-to-rotation mapping in Grand Luxury Tree.
-  function steer(x, y) {
-    const angle = x * Math.PI * .9;
-    targetY = angle + TAU * Math.round((cloud.rotation.y - angle) / TAU);
-    targetX = y * .43;
+  function steer(dx, dy) {
+    targetY += dx * 4.6;
+    targetX = clamp(targetX + dy * 1.85, -.62, .62);
   }
 
   function pick(clientX, clientY) {
-    if (spread < .28 || mode !== 'scatter') return undefined;
     const bounds = host.getBoundingClientRect();
     raycaster.setFromCamera(new THREE.Vector2(
       (clientX - bounds.left) / bounds.width * 2 - 1,
@@ -371,7 +385,7 @@ export function createScene(host) {
     if (document.hidden) return;
     const duration = reducedMotion.matches ? .05 : elapsed;
     const isScatter = mode === 'scatter';
-    const motion = reducedMotion.matches ? 24 : 4.6;
+    const motion = reducedMotion.matches ? 24 : isScatter ? 7.5 : 6;
     if (!reducedMotion.matches) {
       clock += elapsed;
       if (!isScatter) targetY += elapsed * .19;
@@ -379,20 +393,21 @@ export function createScene(host) {
     spread = damp(spread, isScatter ? 1 : 0, motion, duration);
     tableau.position.x = damp(tableau.position.x, isScatter ? 0 : homeX, motion, duration);
     tableau.position.y = damp(tableau.position.y, homeY, motion, duration);
-    cloud.scale.setScalar(1 + (cloudScale - 1) * spread);
+    cloud.scale.setScalar(COMPACT_SCALE + (cloudScale - COMPACT_SCALE) * spread);
     floor.material.uniforms.opacity.value = .68 * (1 - spread * .77);
     star.material.opacity = 1;
-    cloud.rotation.y = damp(cloud.rotation.y, targetY, 4, duration);
-    cloud.rotation.x = damp(cloud.rotation.x, targetX, 4, duration);
+    const turnSpeed = isScatter ? 15 : 6;
+    cloud.rotation.y = damp(cloud.rotation.y, targetY, turnSpeed, duration);
+    cloud.rotation.x = damp(cloud.rotation.x, targetX, turnSpeed, duration);
     inverseRotation.copy(cloud.quaternion).invert();
     for (const field of [sky, floor, tree]) field.material.uniforms.time.value = clock;
     tree.material.uniforms.spread.value = spread;
     for (const photo of photoGroup.children) {
       const { origin, destination, roll } = photo.userData;
-      photo.visible = spread > .08;
       photo.position.lerpVectors(origin, destination, spread);
       photo.position.y += Math.sin(clock * 1.1 + roll * 10) * .12 * spread;
-      photo.scale.setScalar(clamp((spread - .08) / .52, .001, 1));
+      const depth = cardDepth.copy(photo.position).applyQuaternion(cloud.quaternion).z;
+      photo.scale.setScalar(cardScale(spread, depth));
       photo.quaternion.copy(inverseRotation).multiply(photoRotation.setFromAxisAngle(faceAxis, roll));
     }
     renderer.render(scene, camera);
@@ -467,15 +482,17 @@ function createCanvasScene(host) {
       clock += elapsed;
       if (mode === 'tree') targetY += elapsed * .19;
     }
-    spread = damp(spread, mode === 'scatter' ? 1 : 0, still ? 22 : 4.6, duration);
-    x = damp(x, targetX, 4, duration);
-    y = damp(y, targetY, 4, duration);
+    const isScatter = mode === 'scatter';
+    spread = damp(spread, isScatter ? 1 : 0, still ? 22 : isScatter ? 7.5 : 6, duration);
+    const turnSpeed = isScatter ? 15 : 6;
+    x = damp(x, targetX, turnSpeed, duration);
+    y = damp(y, targetY, turnSpeed, duration);
     rotation.set(x, y, 0);
     quaternion.setFromEuler(rotation);
     const { units, offsetX, offsetY, spreadScale } = stageFraming(width, height, presenting);
     const centerX = width / 2 + offsetX * units * (1 - spread);
     const centerY = height / 2 - offsetY * units;
-    const scale = units * (1 + (spreadScale - 1) * spread);
+    const scale = units * (COMPACT_SCALE + (spreadScale - COMPACT_SCALE) * spread);
 
     context.setTransform(ratio, 0, 0, ratio, 0, 0);
     context.clearRect(0, 0, width, height);
@@ -491,7 +508,7 @@ function createCanvasScene(host) {
       context.globalAlpha = .65 * (1 - .77 * spread);
       for (const particle of floor) {
         const [fx, fy, fz] = particle.from;
-        dot(particle, centerX + fx * units, centerY - (fy * .97 - fz * .22) * units, particle.size);
+        dot(particle, centerX + fx * units, centerY - (fy * .97 * COMPACT_SCALE - fz * .22) * units, particle.size);
       }
     }
 
@@ -504,7 +521,9 @@ function createCanvasScene(host) {
         from[2] + (to[2] - from[2]) * spread
       ).applyQuaternion(quaternion);
       context.globalAlpha = .64 + .28 * Math.sin(i * 5.31 + clock * 2);
-      dot(particle, centerX + point.x * scale, centerY - point.y * scale, particle.size * (1.1 + .20 * spread));
+      const outlineGlow = from === to ? .30 : 0;
+      const size = particle.size * (1.1 + (.20 + outlineGlow) * spread);
+      dot(particle, centerX + point.x * scale, centerY - point.y * scale, size);
     }
     context.globalAlpha = 1;
     point.set(0, 4.25, 0).applyQuaternion(quaternion);
@@ -513,14 +532,14 @@ function createCanvasScene(host) {
     context.globalCompositeOperation = 'source-over';
     context.globalAlpha = 1;
 
-    positionedCards = spread > .08 ? cards.map((card) => {
+    positionedCards = cards.map((card) => {
       point.lerpVectors(card.origin, card.destination, spread);
       point.y += Math.sin(clock * 1.1 + card.roll * 10) * .12 * spread;
       point.applyQuaternion(quaternion);
-      const size = clamp((spread - .08) / .52, .001, 1) * scale;
+      const size = cardScale(spread, point.z) * scale;
       return { ...card, x: centerX + point.x * scale, y: centerY - point.y * scale,
         z: point.z, screenWidth: card.width * size, screenHeight: card.height * size };
-    }).sort((first, second) => first.z - second.z) : [];
+    }).sort((first, second) => first.z - second.z);
     for (const card of positionedCards) {
       context.save();
       context.translate(card.x, card.y);
@@ -547,13 +566,11 @@ function createCanvasScene(host) {
       targetY += dx * .009;
       targetX = clamp(targetX + dy * .007, -.55, .55);
     },
-    steer(handX, handY) {
-      const angle = handX * Math.PI * .9;
-      targetY = angle + TAU * Math.round((y - angle) / TAU);
-      targetX = handY * .43;
+    steer(dx, dy) {
+      targetY += dx * 4.6;
+      targetX = clamp(targetX + dy * 1.85, -.62, .62);
     },
     pick(clientX, clientY) {
-      if (mode !== 'scatter' || spread < .28) return undefined;
       const bounds = canvas.getBoundingClientRect();
       const px = clientX - bounds.left;
       const py = clientY - bounds.top;

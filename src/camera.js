@@ -59,7 +59,7 @@ export function startCamera({ onReady, onHand, onError }) {
       try {
         const hand = readHand(tracker.detectForVideo(video, now).landmarks[0], wasPinching);
         wasPinching = hand?.pose === 'pinch';
-        onHand(hand, stabilize(hand?.pose ?? 'neutral'));
+        onHand(hand, stabilize(hand?.pose ?? 'neutral'), now);
       } catch (error) {
         fail(error);
         return;
