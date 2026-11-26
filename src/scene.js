@@ -99,13 +99,15 @@ function sampleTree(index) {
     size *= 2.35;
   }
 
-  const latitude = Math.asin(Math.random() * 2 - 1);
-  const distance = .8 + Math.pow(Math.random(), .62) * 5.2;
-  const to = [
-    distance * Math.cos(angle) * Math.cos(latitude) * 1.34,
-    distance * Math.sin(latitude) * .81,
-    distance * Math.sin(angle) * Math.cos(latitude) * 1.06
-  ];
+  let to = from;
+  if (index % 3 === 0 && index % 9 !== 0 && index % 20 !== 1) {
+    const flight = .45 + Math.random() * 2.3;
+    to = [
+      from[0] + Math.cos(angle) * flight,
+      from[1] + (Math.random() - .5) * 1.05,
+      from[2] + Math.sin(angle) * flight
+    ];
+  }
   return { from, to, color, size };
 }
 
@@ -184,13 +186,14 @@ function photoCard(photo, index, amount) {
   context.textAlign = 'center';
   context.fillText(String(index + 1).padStart(2, '0'), canvas.width / 2, canvas.height - 13);
 
-  const angle = index * GOLDEN_ANGLE;
-  const y = 1 - 2 * (index + .5) / amount;
-  const ring = Math.sqrt(1 - y * y);
+  const angle = index * GOLDEN_ANGLE + .35;
+  const heightFraction = 1 - (index + .5) / amount;
+  const y = heightFraction * 6.45 - 3.28;
+  const radius = 1.55 + 2.75 * Math.pow(1 - heightFraction, .8);
   return {
     canvas, width, height: height + .23, index,
-    destination: new THREE.Vector3(Math.cos(angle) * ring * 5.45, y * 3.55, Math.sin(angle) * ring * 3.6),
-    origin: new THREE.Vector3(Math.cos(angle) * .2, y * .9, Math.sin(angle) * .2),
+    destination: new THREE.Vector3(Math.cos(angle) * radius, y, Math.sin(angle) * radius),
+    origin: new THREE.Vector3(Math.cos(angle) * .2, y * .68, Math.sin(angle) * .2),
     roll: .24 * Math.sin(angle)
   };
 }
@@ -201,8 +204,34 @@ function photoMesh(photo, index, amount) {
   texture.colorSpace = THREE.SRGBColorSpace;
   const material = new THREE.MeshBasicMaterial({ map: texture });
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(width, height), material);
-  mesh.userData = positioning;
+  mesh.userData = { ...positioning, width, height };
   return mesh;
+}
+
+function focusTarget(cards, width, height, previous) {
+  let closest;
+  let best = Infinity;
+  for (const card of cards) {
+    if (card.x < 0 || card.x > width || card.y < 0 || card.y > height) continue;
+    const distance = Math.hypot(card.x - width / 2, card.y - height / 2);
+    const score = distance - card.z * 4 - (card.index === previous ? 12 : 0);
+    if (score < best) {
+      best = score;
+      closest = card;
+    }
+  }
+  return closest;
+}
+
+function stageFraming(width, height, presenting) {
+  const aspect = width / height;
+  const viewHeight = presenting ? Math.max(11.8, 7 / aspect) : aspect < .93 ? 14.7 : 11.8;
+  return {
+    units: height / viewHeight,
+    offsetX: presenting || aspect <= 1.2 ? 0 : Math.min(2.3, viewHeight * aspect * .10),
+    offsetY: presenting ? 0 : aspect < .93 ? -1.25 : -.35,
+    spreadScale: Math.min(1, viewHeight * aspect / 11)
+  };
 }
 
 export function createScene(host) {
@@ -242,6 +271,7 @@ export function createScene(host) {
   const faceAxis = new THREE.Vector3(0, 0, 1);
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
   let mode = 'tree';
+  let presenting = false;
   let spread = 0;
   let targetX = 0;
   let targetY = 0;
@@ -258,15 +288,16 @@ export function createScene(host) {
     const pixelRatio = Math.min(devicePixelRatio, width <= 690 ? 1.4 : 1.65);
     renderer.setPixelRatio(pixelRatio);
     renderer.setSize(width, height, false);
-    const viewHeight = aspect < .93 ? 14.7 : 11.8;
+    const framing = stageFraming(width, height, presenting);
+    const viewHeight = height / framing.units;
     camera.left = -viewHeight * aspect / 2;
     camera.right = viewHeight * aspect / 2;
     camera.top = viewHeight / 2;
     camera.bottom = -viewHeight / 2;
     camera.updateProjectionMatrix();
-    homeX = aspect > 1.2 ? Math.min(2.3, viewHeight * aspect * .10) : 0;
-    homeY = aspect < .93 ? -1.25 : -.35;
-    cloudScale = Math.min(1, viewHeight * aspect / 13.2);
+    homeX = framing.offsetX;
+    homeY = framing.offsetY;
+    cloudScale = framing.spreadScale;
     for (const field of [sky, floor, tree]) field.material.uniforms.pixels.value = pixelRatio;
   }
   new ResizeObserver(resize).observe(host);
@@ -298,7 +329,7 @@ export function createScene(host) {
   function steer(x, y) {
     const angle = x * Math.PI * .9;
     targetY = angle + TAU * Math.round((cloud.rotation.y - angle) / TAU);
-    targetX = y * Math.PI * .25;
+    targetX = y * .43;
   }
 
   function pick(clientX, clientY) {
@@ -311,19 +342,27 @@ export function createScene(host) {
     return raycaster.intersectObjects(photoGroup.children)[0]?.object.userData.index;
   }
 
-  function closestPhoto() {
+  function targetPhoto(previous) {
+    if (mode !== 'scatter' || spread < .45) return undefined;
+    const width = host.clientWidth;
+    const height = host.clientHeight;
     const position = new THREE.Vector3();
-    let closest;
-    let distance = Infinity;
-    for (const mesh of photoGroup.children) {
-      mesh.getWorldPosition(position).project(camera);
-      const score = position.x ** 2 + position.y ** 2 + position.z * .10;
-      if (score < distance) {
-        closest = mesh.userData.index;
-        distance = score;
-      }
-    }
-    return closest;
+    const units = height / (camera.top - camera.bottom) * cloud.scale.x;
+    const cards = photoGroup.children.map((mesh) => {
+      mesh.getWorldPosition(position);
+      const z = position.z;
+      position.project(camera);
+      const { index, width: cardWidth, height: cardHeight, roll } = mesh.userData;
+      return { index, z, roll, x: (position.x + 1) * width / 2, y: (1 - position.y) * height / 2,
+        screenWidth: cardWidth * units * mesh.scale.x, screenHeight: cardHeight * units * mesh.scale.y };
+    });
+    return focusTarget(cards, width, height, previous);
+  }
+
+  function setPresentation(enabled) {
+    presenting = enabled;
+    sky.visible = floor.visible = !enabled;
+    resize();
   }
 
   renderer.setAnimationLoop((frameTime) => {
@@ -342,7 +381,7 @@ export function createScene(host) {
     tableau.position.y = damp(tableau.position.y, homeY, motion, duration);
     cloud.scale.setScalar(1 + (cloudScale - 1) * spread);
     floor.material.uniforms.opacity.value = .68 * (1 - spread * .77);
-    star.material.opacity = Math.pow(1 - spread, 2);
+    star.material.opacity = 1;
     cloud.rotation.y = damp(cloud.rotation.y, targetY, 4, duration);
     cloud.rotation.x = damp(cloud.rotation.x, targetX, 4, duration);
     inverseRotation.copy(cloud.quaternion).invert();
@@ -359,7 +398,7 @@ export function createScene(host) {
     renderer.render(scene, camera);
   });
 
-  return { setMode, setPhotos, drag, steer, pick, closestPhoto };
+  return { setMode, setPhotos, setPresentation, drag, steer, pick, targetPhoto };
 }
 
 function createCanvasScene(host) {
@@ -395,6 +434,7 @@ function createCanvasScene(host) {
   let height = 0;
   let ratio = 1;
   let mode = 'tree';
+  let presenting = false;
   let x = 0;
   let y = 0;
   let targetX = 0;
@@ -432,11 +472,10 @@ function createCanvasScene(host) {
     y = damp(y, targetY, 4, duration);
     rotation.set(x, y, 0);
     quaternion.setFromEuler(rotation);
-    const aspect = width / height;
-    const units = height / (aspect < .93 ? 14.7 : 11.8);
-    const centerX = width / 2 + (aspect > 1.2 ? Math.min(2.3 * units, width * .10) : 0) * (1 - spread);
-    const centerY = height / 2 + (aspect < .93 ? 1.25 : .35) * units;
-    const scale = units + (Math.min(units, width / 13.2) - units) * spread;
+    const { units, offsetX, offsetY, spreadScale } = stageFraming(width, height, presenting);
+    const centerX = width / 2 + offsetX * units * (1 - spread);
+    const centerY = height / 2 - offsetY * units;
+    const scale = units * (1 + (spreadScale - 1) * spread);
 
     context.setTransform(ratio, 0, 0, ratio, 0, 0);
     context.clearRect(0, 0, width, height);
@@ -445,13 +484,15 @@ function createCanvasScene(host) {
     function dot(particle, px, py, size) {
       context.drawImage(dots.get(particle.color), px - size / 2, py - size / 2, size, size);
     }
-    for (const particle of sky) {
-      dot(particle, width / 2 + particle.from[0] * units, height / 2 - particle.from[1] * units, particle.size);
-    }
-    context.globalAlpha = .65 * (1 - .77 * spread);
-    for (const particle of floor) {
-      const [fx, fy, fz] = particle.from;
-      dot(particle, centerX + fx * units, centerY - (fy * .97 - fz * .22) * units, particle.size);
+    if (!presenting) {
+      for (const particle of sky) {
+        dot(particle, width / 2 + particle.from[0] * units, height / 2 - particle.from[1] * units, particle.size);
+      }
+      context.globalAlpha = .65 * (1 - .77 * spread);
+      for (const particle of floor) {
+        const [fx, fy, fz] = particle.from;
+        dot(particle, centerX + fx * units, centerY - (fy * .97 - fz * .22) * units, particle.size);
+      }
     }
 
     for (let i = 0; i < tree.length; i++) {
@@ -465,8 +506,10 @@ function createCanvasScene(host) {
       context.globalAlpha = .64 + .28 * Math.sin(i * 5.31 + clock * 2);
       dot(particle, centerX + point.x * scale, centerY - point.y * scale, particle.size * (1.1 + .20 * spread));
     }
-    context.globalAlpha = (1 - spread) ** 2;
-    context.drawImage(star, centerX - 1.23 * units, centerY - 5.48 * units, 2.46 * units, 2.46 * units);
+    context.globalAlpha = 1;
+    point.set(0, 4.25, 0).applyQuaternion(quaternion);
+    context.drawImage(star, centerX + (point.x - 1.23) * scale,
+      centerY - (point.y + 1.23) * scale, 2.46 * scale, 2.46 * scale);
     context.globalCompositeOperation = 'source-over';
     context.globalAlpha = 1;
 
@@ -493,6 +536,9 @@ function createCanvasScene(host) {
       mode = next;
       if (mode === 'tree') targetX = 0;
     },
+    setPresentation(enabled) {
+      presenting = enabled;
+    },
     setPhotos(photos) {
       cards = photos.map((photo, index) => photoCard(photo, index, photos.length));
       positionedCards = [];
@@ -504,7 +550,7 @@ function createCanvasScene(host) {
     steer(handX, handY) {
       const angle = handX * Math.PI * .9;
       targetY = angle + TAU * Math.round((y - angle) / TAU);
-      targetX = handY * Math.PI * .25;
+      targetX = handY * .43;
     },
     pick(clientX, clientY) {
       if (mode !== 'scatter' || spread < .28) return undefined;
@@ -520,10 +566,9 @@ function createCanvasScene(host) {
           Math.abs(dx * sin + dy * cos) < card.screenHeight / 2;
       })?.index;
     },
-    closestPhoto() {
-      if (!positionedCards.length) return cards[0]?.index;
-      const distance = (card) => (card.x - width / 2) ** 2 + (card.y - height / 2) ** 2 - card.z * 12;
-      return positionedCards.reduce((closest, card) => distance(card) < distance(closest) ? card : closest).index;
+    targetPhoto(previous) {
+      if (mode !== 'scatter' || spread < .45) return undefined;
+      return focusTarget(positionedCards, width, height, previous);
     }
   };
 }

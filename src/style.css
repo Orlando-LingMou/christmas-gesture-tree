@@ -27,18 +27,31 @@ button:focus-visible, a:focus-visible { outline: 2px solid #ffd58a; outline-offs
 .scene:active { cursor: grabbing; }
 .scene canvas { width: 100%; height: 100%; display: block; }
 .title { position: absolute; top: clamp(22px, 4vw, 57px); left: clamp(22px, 4vw, 58px); pointer-events: none; transition: opacity .35s; }
-.stage[data-mode="scatter"] .title { opacity: .33; }
+.stage[data-mode="scatter"] h1 { opacity: .33; }
+h1 { transition: opacity .35s; }
+.stage:not(.presentation-view) .presentation-name { display: none; }
 h1 { margin: 0; font: 400 clamp(3rem, 6.6vw, 7.2rem)/.83 Georgia, "Times New Roman", serif; letter-spacing: -.07em; color: #ffebc1; text-shadow: 0 4px 42px #110a05; }
 h1 em { font-weight: 400; color: #eabe79; }
-.title p { color: #d6b98f; margin: 23px 0 0; font-size: .9rem; letter-spacing: .13em; }
+.tree-name { color: #f1ce91; font: 600 clamp(1.35rem, 2.8vw, 2.8rem)/1.18 "Songti SC", "Noto Serif CJK SC", Georgia, serif; letter-spacing: .07em; text-shadow: 0 0 20px #a66329b0; overflow-wrap: anywhere; }
+.title .tree-name { max-width: min(70vw, 11em); margin: 19px 0 0; }
+.presentation-name { position: absolute; left: 50%; top: calc(50% + min(36.5dvh, 62vw)); transform: translateX(-50%); width: min(80vw, 15em); margin: 0; text-align: center; pointer-events: none; }
+body.presentation { overflow: hidden; }
+body.presentation .header, body.presentation .controls, body.presentation .title, body.presentation .scene-actions { display: none; }
+.stage.presentation-view { position: fixed; z-index: 10; inset: 0; width: 100%; height: 100dvh; min-height: 0; border: 0; border-radius: 0; background: radial-gradient(ellipse at 50% 58%, #20160d, #0b0907 56%, #070605 100%); }
+.back-to-editor { position: absolute; top: max(12px, env(safe-area-inset-top)); right: max(12px, env(safe-area-inset-right)); opacity: 0; }
+.back-to-editor:hover, .back-to-editor:focus-visible { opacity: 1; }
+@media (hover: none) { .back-to-editor { opacity: .58; } }
+.photo-target { position: absolute; top: 0; left: 0; border: 2px solid #fff3b1; box-shadow: 0 0 10px #fdbf62, inset 0 0 5px #ffefad; pointer-events: none; border-radius: 2px; transform-origin: 50% 50%; }
+.personalize { display: grid; gap: 10px; }
+.personalize label { font: 600 1rem/1.4 "Songti SC", "Noto Serif CJK SC", Georgia, serif; letter-spacing: .06em; }
+.personalize input { width: 100%; min-width: 0; min-height: 44px; border: 1px solid #b8904f73; border-radius: 8px; background: #100c08; color: #f9e7c6; padding: 8px 11px; font: inherit; }
+.personalize input::placeholder { color: var(--muted); }
+.personalize input:focus-visible { outline: 2px solid #ffd58a; outline-offset: 2px; }
 .scene-actions { position: absolute; inset: auto 18px 17px; display: flex; justify-content: space-between; align-items: center; pointer-events: none; }
 .scene-actions > * { pointer-events: auto; }
 .state, .icon-button { border: 1px solid var(--line); border-radius: 8px; background: #15100cdf; color: #f7dfa9; }
 .state { font-size: .82rem; padding: 8px 12px; }
 .icon-button { min-width: 42px; min-height: 42px; padding: 3px 7px; font-size: 1.45rem; line-height: 1; }
-.camera-feed { position: absolute; top: 18px; right: 18px; width: clamp(86px, 13%, 140px); aspect-ratio: 4/3; overflow: hidden; border-radius: 8px; border: 1px solid var(--line); pointer-events: none; background: #100d09; }
-.camera-feed video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
-.camera-feed span { position: absolute; bottom: 0; inset-inline: 0; background: #0c0806cf; color: #ffe5b1; text-align: center; font-size: .74rem; padding: 3px; }
 .controls { display: grid; gap: 12px; }
 .panel { background: #16120e; border: 1px solid var(--line); border-radius: 14px; padding: 18px; }
 .panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 14px; }
@@ -82,10 +95,10 @@ dialog::backdrop { background: #060402d9; backdrop-filter: blur(9px); }
   .stage { min-height: 420px; height: 63svh; }
   .title { top: 25px; left: 20px; }
   h1 { font-size: clamp(2.8rem, 11vw, 4.1rem); }
-  .title p { font-size: .78rem; margin-top: 14px; }
+  .title .tree-name { margin-top: 14px; }
   .controls { grid-template-columns: minmax(0,1fr); gap: 10px; }
   .scene-actions { inset: auto 12px 11px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .title { transition: none; }
+  h1 { transition: none; }
 }

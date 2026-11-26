@@ -23,13 +23,17 @@ async function createTracker() {
   });
 }
 
-export function startCamera(video, { onReady, onHand, onError }) {
+export function startCamera({ onReady, onHand, onError }) {
+  const video = document.createElement('video');
+  video.muted = true;
+  video.playsInline = true;
   let stream;
   let tracker;
   let cancelled = false;
   let frameId;
   let lastFrame = -1;
   let lastScan = 0;
+  let wasPinching = false;
   const stabilize = stabilizePose();
 
   function stop() {
@@ -49,11 +53,12 @@ export function startCamera(video, { onReady, onHand, onError }) {
 
   function scan(now) {
     if (cancelled) return;
-    if (video.readyState >= 2 && video.currentTime !== lastFrame && now - lastScan >= 42) {
+    if (video.readyState >= 2 && video.currentTime !== lastFrame && now - lastScan >= 29) {
       lastScan = now;
       lastFrame = video.currentTime;
       try {
-        const hand = readHand(tracker.detectForVideo(video, now).landmarks[0]);
+        const hand = readHand(tracker.detectForVideo(video, now).landmarks[0], wasPinching);
+        wasPinching = hand?.pose === 'pinch';
         onHand(hand, stabilize(hand?.pose ?? 'neutral'));
       } catch (error) {
         fail(error);
@@ -70,7 +75,7 @@ export function startCamera(video, { onReady, onHand, onError }) {
       }
       stream = await navigator.mediaDevices.getUserMedia({
         audio: false,
-        video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }
+        video: { facingMode: 'user', width: { ideal: 480 }, height: { ideal: 360 }, frameRate: { ideal: 30 } }
       });
       if (cancelled) {
         stream.getTracks().forEach((track) => track.stop());

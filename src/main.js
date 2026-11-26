@@ -14,6 +14,10 @@ const cameraButton = byId('camera');
 const viewer = byId('viewer');
 const viewerPhoto = byId('viewer-photo');
 const handIndicator = byId('hand-indicator');
+const nameInput = byId('name');
+const generate = byId('generate');
+const backToEditor = byId('back-to-editor');
+const photoTarget = byId('photo-target');
 
 let scene;
 let photos = [];
@@ -25,6 +29,8 @@ let stopCamera;
 let cameraRequest = 0;
 let cameraState = 'off';
 let pointer;
+let presenting = false;
+let selectedTarget;
 
 function feedback(id, message = '') {
   const element = byId(id);
@@ -39,14 +45,16 @@ try {
   feedback('stage-error', '当前浏览器无法启动 3D 场景。试试开启硬件加速，或换到最新版 Chrome、Edge 或 Safari。');
   cameraButton.disabled = true;
   toggle.disabled = true;
+  generate.disabled = true;
 }
 
 function setMode(next) {
   mode = next;
   stage.dataset.mode = mode;
   scene?.setMode(mode);
+  if (mode === 'tree') displayTarget();
   const scattered = mode === 'scatter';
-  byId('scene-state').textContent = scattered ? '粒子云' : '树形';
+  byId('scene-state').textContent = scattered ? '粒子展开' : '树形';
   toggle.textContent = scattered ? '聚合成树' : '散开粒子';
   toggle.setAttribute('aria-pressed', String(scattered));
 }
@@ -55,6 +63,7 @@ function showPhoto(index, fromGesture = false) {
   if (!photos.length || index === undefined) return;
   activePhoto = (index + photos.length) % photos.length;
   gestureViewer = fromGesture;
+  displayTarget();
   viewerPhoto.src = photos[activePhoto].url;
   viewerPhoto.alt = `第 ${activePhoto + 1} 张所选照片`;
   byId('viewer-count').textContent = `${activePhoto + 1} / ${photos.length}`;
@@ -62,6 +71,7 @@ function showPhoto(index, fromGesture = false) {
 }
 
 function renderPhotos() {
+  displayTarget();
   const thumbnails = photos.map((photo, index) => {
     const button = document.createElement('button');
     button.className = 'thumb';
@@ -134,14 +144,21 @@ function setCameraState(next) {
   cameraButton.lastChild.textContent = {
     off: ' 开启摄像头', loading: ' 取消开启', on: ' 关闭摄像头'
   }[next];
-  byId('camera-feed').hidden = next !== 'on';
-  if (next !== 'on') handIndicator.textContent = '等待手势';
+  handIndicator.hidden = next !== 'on';
+  if (next !== 'on') displayTarget();
+}
+
+function displayTarget(target) {
+  selectedTarget = target;
+  photoTarget.hidden = !target;
+  if (!target) return;
+  const { x, y, screenWidth, screenHeight, roll } = target;
+  photoTarget.style.width = `${screenWidth + 5}px`;
+  photoTarget.style.height = `${screenHeight + 5}px`;
+  photoTarget.style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%) rotate(${-roll}rad)`;
 }
 
 function updateHand(hand, change) {
-  const labels = { open: '张开手掌', fist: '握拳', pinch: '捏合', neutral: '已识别手部' };
-  const label = hand ? labels[hand.pose] : '等待手势';
-  if (handIndicator.textContent !== label) handIndicator.textContent = label;
   if (change === 'fist') {
     if (viewer.open) viewer.close();
     setMode('tree');
@@ -150,10 +167,20 @@ function updateHand(hand, change) {
     if (gestureViewer && viewer.open) viewer.close();
     setMode('scatter');
   }
-  if (hand?.pose === 'open' && mode === 'scatter' && !viewer.open && !pointer) {
-    scene.steer(hand.x, hand.y);
+
+  const canSelect = hand && mode === 'scatter' && !viewer.open;
+  if (canSelect && hand.pose === 'open' && !pointer) scene.steer(hand.x, hand.y);
+  if (!canSelect) {
+    displayTarget();
+  } else if (hand.pose !== 'pinch' || !selectedTarget) {
+    displayTarget(scene.targetPhoto(selectedTarget?.index));
   }
-  if (change === 'pinch' && mode === 'scatter' && !viewer.open) showPhoto(scene.closestPhoto(), true);
+
+  const labels = { open: '张开手掌', fist: '握拳', pinch: '捏合', neutral: '已识别手部' };
+  const label = hand ? labels[hand.pose] : '等待手势';
+  const hint = selectedTarget ? `${label} · 已选中第 ${selectedTarget.index + 1} 张` : label;
+  if (handIndicator.textContent !== hint) handIndicator.textContent = hint;
+  if (change === 'pinch' && canSelect) showPhoto(selectedTarget?.index, true);
 }
 
 function cameraError(error) {
@@ -183,8 +210,9 @@ async function toggleCamera() {
   try {
     const { startCamera } = await import('./camera.js');
     if (request !== cameraRequest) return;
-    stopCamera = startCamera(byId('video'), {
+    stopCamera = startCamera({
       onReady: () => {
+        handIndicator.textContent = '等待手势';
         setCameraState('on');
         feedback('camera-feedback');
       },
@@ -202,6 +230,35 @@ function setImmersive(enabled) {
   fullscreen.setAttribute('aria-label', enabled ? '退出沉浸模式' : '沉浸模式');
   fullscreen.title = fullscreen.getAttribute('aria-label');
 }
+
+function updateName() {
+  const name = nameInput.value.trim();
+  for (const id of ['editor-name', 'presentation-name']) {
+    const label = byId(id);
+    label.textContent = name;
+    label.hidden = !name;
+  }
+}
+
+function setPresentation(enabled) {
+  presenting = enabled;
+  setImmersive(false);
+  document.body.classList.toggle('presentation', enabled);
+  stage.classList.toggle('presentation-view', enabled);
+  backToEditor.hidden = !enabled;
+  scene?.setPresentation(enabled);
+  displayTarget();
+  if (enabled) {
+    setMode('tree');
+    generate.blur();
+  } else {
+    generate.focus({ preventScroll: true });
+  }
+}
+
+nameInput.addEventListener('input', updateName);
+generate.addEventListener('click', () => setPresentation(true));
+backToEditor.addEventListener('click', () => setPresentation(false));
 
 upload.addEventListener('click', () => files.click());
 files.addEventListener('change', () => {
@@ -272,8 +329,11 @@ document.addEventListener('keydown', (event) => {
     if (event.key === 'ArrowRight') showPhoto(activePhoto + 1);
     return;
   }
-  if (event.defaultPrevented) return;
-  if (event.key === 'Escape') setImmersive(false);
+  if (event.defaultPrevented || event.target instanceof HTMLInputElement) return;
+  if (event.key === 'Escape') {
+    if (presenting) setPresentation(false);
+    else setImmersive(false);
+  }
   if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
     if (!scene) return;
     event.preventDefault();
@@ -289,3 +349,5 @@ window.addEventListener('pagehide', () => {
 });
 
 setMode('tree');
+
+updateName();

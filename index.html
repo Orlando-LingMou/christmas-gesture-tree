@@ -19,12 +19,11 @@
         <div class="scene" id="scene" aria-hidden="true"></div>
         <div class="title">
           <h1>Merry<br><em>Christmas</em></h1>
-          <p>把回忆藏进一棵圣诞树</p>
+          <p class="tree-name" id="editor-name" hidden></p>
         </div>
-        <div class="camera-feed" id="camera-feed" hidden>
-          <video id="video" muted playsinline aria-label="本地摄像头预览"></video>
-          <span id="hand-indicator">等待手势</span>
-        </div>
+        <p class="tree-name presentation-name" id="presentation-name" hidden></p>
+        <div class="photo-target" id="photo-target" aria-hidden="true" hidden></div>
+        <button type="button" class="icon-button back-to-editor" id="back-to-editor" aria-label="返回编辑" title="返回编辑（Esc）" hidden>×</button>
         <div class="scene-actions">
           <span class="state" id="scene-state" aria-live="polite">树形</span>
           <button type="button" class="icon-button" id="fullscreen" aria-label="沉浸模式" title="沉浸模式">⛶</button>
@@ -33,6 +32,11 @@
       </section>
 
       <aside class="controls" aria-label="操作面板">
+        <section class="panel personalize">
+          <label for="name">名字</label>
+          <input id="name" type="text" maxlength="24" placeholder="输入要显示的名字" autocomplete="off">
+          <button type="button" class="gold-button" id="generate">生成圣诞树</button>
+        </section>
         <section class="panel photos">
           <div class="panel-heading"><h2>我的照片</h2><span class="count" id="count">0 / 15</span></div>
           <input id="files" type="file" accept="image/*" multiple hidden>
@@ -47,10 +51,11 @@
           <div class="panel-heading"><h2>手势控制</h2></div>
           <button type="button" class="gold-button" id="camera"><span aria-hidden="true">◉</span> 开启摄像头</button>
           <p class="feedback" id="camera-feedback" role="status" hidden></p>
+          <p class="note" id="hand-indicator" hidden></p>
           <dl>
             <div><dt>张开手掌</dt><dd>炸开粒子，浮出照片</dd></div>
             <div><dt>保持张手并移动</dt><dd>转动照片与粒子</dd></div>
-            <div><dt>拇指和食指捏合</dt><dd>放大镜头前的照片</dd></div>
+            <div><dt>拇指和食指捏合</dt><dd>放大金框选中的照片</dd></div>
             <div><dt>握拳</dt><dd>重新聚成圣诞树</dd></div>
           </dl>
         </section>
