@@ -265,7 +265,7 @@ function setPresentation(enabled) {
   stage.classList.toggle('presentation-view', enabled);
   backToEditor.hidden = !enabled;
   scene?.setPresentation(enabled);
-  effects.setVisible(enabled);
+  effects.setPresentation(enabled);
   displayTarget();
   if (enabled) {
     setMode('tree');

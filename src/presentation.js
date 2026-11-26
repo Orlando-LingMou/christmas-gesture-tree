@@ -1,10 +1,13 @@
+import { createNightSky } from './night-sky.js';
+
 const TAU = Math.PI * 2;
 const starColors = ['#ffe8b8', '#efbd80', '#b1c6ff', '#b3f1de', '#e9b8ff'];
 
 export function createPresentationEffects(canvas, greeting) {
   const context = canvas.getContext('2d');
-  if (!context) return { setVisible() {}, burstGreeting() {} };
+  if (!context) return { setPresentation() {}, burstGreeting() {} };
 
+  const night = createNightSky();
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
   const stars = Array.from({ length: 250 }, (_, i) => {
     const x = Math.random();
@@ -19,7 +22,7 @@ export function createPresentationEffects(canvas, greeting) {
       sparkle: i % 19 === 0
     };
   });
-  let visible = false;
+  let presenting = false;
   let width = 0;
   let height = 0;
   let ratio = 1;
@@ -28,7 +31,6 @@ export function createPresentationEffects(canvas, greeting) {
   let burstTime = 0;
 
   function resize() {
-    if (!visible) return;
     const bounds = canvas.getBoundingClientRect();
     width = bounds.width;
     height = bounds.height;
@@ -45,6 +47,7 @@ export function createPresentationEffects(canvas, greeting) {
     const time = still ? 0 : now / 1000;
     context.clearRect(0, 0, width, height);
     context.globalCompositeOperation = 'lighter';
+    night.drawAurora(context, width, height, time, presenting);
 
     for (const star of stars) {
       const x = star.x * width;
@@ -68,6 +71,8 @@ export function createPresentationEffects(canvas, greeting) {
       }
     }
 
+    night.drawRain(context, width, height, time, presenting);
+
     const age = (now - burstTime) / 1000;
     if (age < 1.28) {
       const travel = 1 - Math.exp(-age * 4);
@@ -82,26 +87,24 @@ export function createPresentationEffects(canvas, greeting) {
     }
     context.globalAlpha = 1;
     context.globalCompositeOperation = 'source-over';
-    if (visible && !still) frame = requestAnimationFrame(draw);
+    if (!still) frame = requestAnimationFrame(draw);
   }
 
-  function setVisible(enabled) {
-    if (visible === enabled) return;
-    visible = enabled;
-    cancelAnimationFrame(frame);
+  function setPresentation(enabled) {
+    presenting = enabled;
     sparks = [];
-    if (!enabled) return;
     resize();
-    if (!reducedMotion.matches) frame = requestAnimationFrame(draw);
   }
+
+  resize();
+  if (!reducedMotion.matches) frame = requestAnimationFrame(draw);
   reducedMotion.addEventListener('change', () => {
-    if (!visible) return;
     cancelAnimationFrame(frame);
     draw(performance.now());
   });
 
   function burstGreeting() {
-    if (!visible || reducedMotion.matches || !width || !height) return;
+    if (!presenting || reducedMotion.matches || !width || !height) return;
     const overlay = canvas.getBoundingClientRect();
     const mask = document.createElement('canvas');
     mask.width = Math.ceil(width);
@@ -138,5 +141,5 @@ export function createPresentationEffects(canvas, greeting) {
     burstTime = performance.now();
   }
 
-  return { setVisible, burstGreeting };
+  return { setPresentation, burstGreeting };
 }
