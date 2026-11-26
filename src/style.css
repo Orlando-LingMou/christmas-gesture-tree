@@ -36,6 +36,9 @@ h1 em { font-weight: 400; color: #eabe79; }
 .stage:not(.presentation-view) .presentation-name { display: none; }
 .presentation-stars { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .presentation-name {
+  --greeting-title-size: clamp(2rem, 5.4vw, min(5.1rem, 12dvh));
+  --greeting-name-size: clamp(1.18rem, 2.8vw, min(2.9rem, 7dvh));
+  --greeting-size: .83;
   position: absolute;
   inset: 0;
   width: min(90%, 1100px);
@@ -55,9 +58,10 @@ h1 em { font-weight: 400; color: #eabe79; }
   -webkit-text-fill-color: transparent;
   filter: drop-shadow(0 0 9px #ec984bb0) drop-shadow(0 0 23px #f7a7406b);
 }
-.greeting-title { font: italic 400 clamp(2rem, 5.4vw, min(5.1rem, 12dvh))/1 Georgia, "Times New Roman", serif; }
-.greeting-name { margin-top: .36em; font: 600 clamp(1.18rem, 2.8vw, min(2.9rem, 7dvh))/1.14 "Songti SC", "Noto Serif CJK SC", Georgia, serif; letter-spacing: .085em; overflow-wrap: anywhere; }
+.greeting-title { font: italic 400 calc(var(--greeting-title-size) * var(--greeting-size))/1 Georgia, "Times New Roman", serif; }
+.greeting-name { margin-top: .36em; font: 600 calc(var(--greeting-name-size) * var(--greeting-size))/1.14 "Songti SC", "Noto Serif CJK SC", Georgia, serif; letter-spacing: .085em; overflow-wrap: anywhere; }
 .presentation-view[data-mode="scatter"] .presentation-name {
+  --greeting-size: 1;
   top: 36%;
   animation: greeting-reveal 1.42s cubic-bezier(.2, .63, .32, 1) both;
 }
@@ -147,7 +151,9 @@ dialog::backdrop { background: #060402d9; backdrop-filter: blur(9px); }
   .presentation-view[data-mode="scatter"] .presentation-name { top: 37%; }
 }
 @media (max-height: 480px) and (min-aspect-ratio: 4/5) {
-  .presentation-name { top: 79%; }
-  .greeting-title { font-size: clamp(1.55rem, 9dvh, 2.4rem); }
-  .greeting-name { font-size: clamp(1rem, 5.5dvh, 1.5rem); }
+  .presentation-name {
+    --greeting-title-size: clamp(1.55rem, 9dvh, 2.4rem);
+    --greeting-name-size: clamp(1rem, 5.5dvh, 1.5rem);
+    top: 79%;
+  }
 }

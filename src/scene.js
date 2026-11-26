@@ -15,6 +15,14 @@ const SCATTER_RESPONSE = 14;
 const REGROUP_RESPONSE = 10;
 const SCATTER_TURN_RESPONSE = 26;
 const PHOTO_FOCUS_SPREAD = .33;
+const CROWN_HEIGHT = 4.36;
+const CROWN_EDGE_POINTS = 9;
+const CROWN_DUST_POINTS = 150;
+const CROWN_VERTICES = Array.from({ length: 10 }, (_, index) => {
+  const angle = Math.PI / 2 + index * Math.PI / 5;
+  const radius = index % 2 ? .27 : .66;
+  return [Math.cos(angle) * radius, Math.sin(angle) * radius];
+});
 
 function particleField(amount, sample, animated = false) {
   const positions = [];
@@ -144,44 +152,30 @@ function sampleSky(index) {
   };
 }
 
-function starArtwork() {
-  const center = 128;
-  const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = center * 2;
-  const context = canvas.getContext('2d');
-  const vertices = Array.from({ length: 10 }, (_, i) => {
-    const angle = i * Math.PI / 5 - Math.PI / 2;
-    const radius = i % 2 ? 24 : 60;
-    return [center + Math.cos(angle) * radius, center + Math.sin(angle) * radius];
-  });
-  context.beginPath();
-  for (const [x, y] of vertices) context.lineTo(x, y);
-  context.closePath();
-  context.shadowColor = '#ffc05a';
-  context.shadowBlur = 15;
-  context.strokeStyle = '#f9a63c';
-  context.lineWidth = 4;
-  context.stroke();
-  context.shadowColor = '#fff1ad';
-  context.shadowBlur = 6;
-  context.strokeStyle = '#fff4cd';
-  context.lineWidth = 1.7;
-  context.stroke();
-  for (let side = 0; side < vertices.length; side++) {
-    const [x, y] = vertices[side];
-    const [nextX, nextY] = vertices[(side + 1) % vertices.length];
-    for (let i = 0; i < 8; i++) {
-      const t = i / 8;
-      const sparkle = 1 + 1.5 * Math.abs(Math.sin(side * 11 + i * 7));
-      context.fillStyle = i % 3 ? '#ffcf79' : '#fff8d9';
-      context.beginPath();
-      context.arc(x + (nextX - x) * t, y + (nextY - y) * t, sparkle, 0, TAU);
-      context.fill();
-    }
-  }
+function sampleCrown(index) {
+  const outline = index < CROWN_VERTICES.length * CROWN_EDGE_POINTS;
+  const edge = outline ? Math.floor(index / CROWN_EDGE_POINTS) : index % CROWN_VERTICES.length;
+  const [startX, startY] = CROWN_VERTICES[edge];
+  const [endX, endY] = CROWN_VERTICES[(edge + 1) % CROWN_VERTICES.length];
+  const along = outline ? (index % CROWN_EDGE_POINTS) / CROWN_EDGE_POINTS : Math.random();
+  const radius = outline ? 1 : .82 + Math.random() * .33;
+  const x = (startX + (endX - startX) * along) * radius;
+  const y = (startY + (endY - startY) * along) * radius;
+  const expansion = outline ? 1.025 : 1.08 + Math.random() * .70;
+  return {
+    from: [x, y, 0],
+    to: [x * expansion, y * expansion, 0],
+    color: palette[index % 4 ? 0 : 2],
+    size: outline ? 2.35 + Math.random() * 1.65 : 1.15 + Math.random() * 1.05
+  };
+}
 
+const crownParticleCount = CROWN_VERTICES.length * CROWN_EDGE_POINTS + CROWN_DUST_POINTS;
+
+function starFlareTexture() {
+  const center = 128;
   const flare = document.createElement('canvas');
-  flare.width = flare.height = canvas.width;
+  flare.width = flare.height = center * 2;
   const glow = flare.getContext('2d');
   const halo = glow.createRadialGradient(center, center, 0, center, center, center);
   halo.addColorStop(0, '#fff1b62c');
@@ -206,7 +200,7 @@ function starArtwork() {
     glow.lineTo(center + y * 1.45, center - x * 1.45);
     glow.fill();
   }
-  return { outline: canvas, flare };
+  return flare;
 }
 
 function starSprite(image, opacity, size) {
@@ -215,7 +209,7 @@ function starSprite(image, opacity, size) {
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
     map, opacity, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending
   }));
-  sprite.position.set(0, 4.25, 0);
+
   sprite.scale.setScalar(size);
   return sprite;
 }
@@ -326,12 +320,14 @@ export function createScene(host) {
   floor.rotation.x = .22;
   floor.position.y = 4.44 * (1 - COMPACT_SCALE);
   const tree = particleField(11500, sampleTree, true);
-  const crown = starArtwork();
-  const star = starSprite(crown.outline, 1, 2.35);
-  const starFlare = starSprite(crown.flare, .72, 3.3);
+  const crown = new THREE.Group();
+  crown.position.y = CROWN_HEIGHT;
+  const crownLights = particleField(crownParticleCount, sampleCrown);
+  const starFlare = starSprite(starFlareTexture(), .35, 3.3);
+  crown.add(starFlare, crownLights);
   scene.add(sky);
   tableau.add(floor);
-  cloud.add(tree, starFlare, star);
+  cloud.add(tree, crown);
   const raycaster = new THREE.Raycaster();
   const cardDepth = new THREE.Vector3();
   const inverseRotation = new THREE.Quaternion();
@@ -366,7 +362,7 @@ export function createScene(host) {
     homeX = framing.offsetX;
     homeY = framing.offsetY;
     cloudScale = framing.spreadScale;
-    for (const field of [sky, floor, tree]) field.material.uniforms.pixels.value = pixelRatio;
+    for (const field of [sky, floor, tree, crownLights]) field.material.uniforms.pixels.value = pixelRatio;
   }
   new ResizeObserver(resize).observe(host);
   resize();
@@ -447,14 +443,16 @@ export function createScene(host) {
     cloud.scale.setScalar(COMPACT_SCALE + (cloudScale - COMPACT_SCALE) * spread);
     floor.material.uniforms.opacity.value = .68 * (1 - spread * .77);
     const shimmer = starShimmer(clock);
-    starFlare.material.opacity = shimmer;
-    starFlare.scale.setScalar(3.08 + .61 * shimmer);
+    starFlare.material.opacity = shimmer * (.43 + .54 * spread);
+    starFlare.scale.setScalar(2.8 + .5 * shimmer + .7 * spread);
+    crownLights.material.uniforms.opacity.value = .70 + .42 * spread;
     const turnSpeed = isScatter ? SCATTER_TURN_RESPONSE : 6;
     cloud.rotation.y = damp(cloud.rotation.y, targetY, turnSpeed, duration);
     cloud.rotation.x = damp(cloud.rotation.x, targetX, turnSpeed, duration);
     inverseRotation.copy(cloud.quaternion).invert();
-    for (const field of [sky, floor, tree]) field.material.uniforms.time.value = clock;
-    tree.material.uniforms.spread.value = spread;
+    crown.quaternion.copy(inverseRotation);
+    for (const field of [sky, floor, tree, crownLights]) field.material.uniforms.time.value = clock;
+    tree.material.uniforms.spread.value = crownLights.material.uniforms.spread.value = spread;
     for (const photo of photoGroup.children) {
       const { origin, destination, roll } = photo.userData;
       photo.position.lerpVectors(origin, destination, spread);
@@ -483,7 +481,8 @@ function createCanvasScene(host) {
   const quaternion = new THREE.Quaternion();
   const point = new THREE.Vector3();
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
-  const crown = starArtwork();
+  const crownLights = makeField(crownParticleCount, sampleCrown);
+  const flare = starFlareTexture();
   const dots = new Map(palette.map((color) => {
     const dot = document.createElement('canvas');
     dot.width = dot.height = 24;
@@ -579,16 +578,21 @@ function createCanvasScene(host) {
       dot(particle, centerX + point.x * scale, centerY - point.y * scale, size);
     }
     context.globalAlpha = 1;
-    point.set(0, 4.25, 0).applyQuaternion(quaternion);
+    point.set(0, CROWN_HEIGHT, 0).applyQuaternion(quaternion);
     const starX = centerX + point.x * scale;
     const starY = centerY - point.y * scale;
     const shimmer = starShimmer(clock);
-    const haloSize = (3.08 + .61 * shimmer) * scale;
-    const starSize = 2.35 * scale;
-    context.globalAlpha = shimmer;
-    context.drawImage(crown.flare, starX - haloSize / 2, starY - haloSize / 2, haloSize, haloSize);
-    context.globalAlpha = 1;
-    context.drawImage(crown.outline, starX - starSize / 2, starY - starSize / 2, starSize, starSize);
+    const haloSize = (2.8 + .5 * shimmer + .7 * spread) * scale;
+    context.globalAlpha = shimmer * (.43 + .54 * spread);
+    context.drawImage(flare, starX - haloSize / 2, starY - haloSize / 2, haloSize, haloSize);
+    for (const [index, particle] of crownLights.entries()) {
+      const { from, to, size } = particle;
+      const px = starX + (from[0] + (to[0] - from[0]) * spread) * scale;
+      const py = starY - (from[1] + (to[1] - from[1]) * spread) * scale;
+      const twinkle = .76 + .24 * Math.sin(index * 2.39 + clock * 2.1);
+      context.globalAlpha = Math.min(1, twinkle * (.72 + .47 * spread));
+      dot(particle, px, py, size * (1.18 + .66 * spread));
+    }
     context.globalCompositeOperation = 'source-over';
     context.globalAlpha = 1;
 

@@ -1,7 +1,7 @@
 const SKY_WIDTH = 400;
 const SKY_HEIGHT = 240;
 const TAU = 2 * Math.PI;
-const RAIN_SPEED = .54;
+const RAIN_SPEED = .46;
 
 function texture(width, height) {
   const canvas = document.createElement('canvas');
@@ -54,7 +54,7 @@ function rainTexture(depth) {
   }
   context.fillStyle = '#eff8ff';
   context.beginPath();
-  context.ellipse(x, head, 1.45 + depth * .28, 1.9 + depth * .28, 0, 0, TAU);
+  context.ellipse(x, head, 1.62 + depth * .30, 2.05 + depth * .30, 0, 0, TAU);
   context.fill();
   return canvas;
 }
@@ -116,7 +116,7 @@ export function createNightSky() {
       const y = ((drop.offset + time * drop.speed) % 1) * travel - length;
       if (y < -length * .12 || y > height + length) continue;
       const x = drop.x * width - (y - height * .35) * .024;
-      const thickness = (9 + drop.depth * 2.3) * size;
+      const thickness = (9.7 + drop.depth * 2.4) * size;
       const centerFade = .60 + .40 * Math.min(1, Math.abs(drop.x - .5) * 4.2);
       context.globalAlpha = drop.opacity * centerFade * (presenting ? 1 : .68);
       context.drawImage(streaks[drop.depth], x - thickness / 2, y - length * .92, thickness, length);
