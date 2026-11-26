@@ -6,8 +6,8 @@ const clamp = THREE.MathUtils.clamp;
 const damp = THREE.MathUtils.damp;
 
 const palette = [
-  '#ffd385', '#ffb54d', '#ffecb4', '#c48035', '#ffe3a7', '#a76b31',
-  '#36d88d', '#159659', '#70ef9d', '#ff425d', '#d72b42', '#ff7884'
+  '#ffe478', '#ffb838', '#fff5ba', '#d6822a', '#ffd45c', '#8c4a1f',
+  '#47c46b', '#268b4f', '#84eb88', '#ea4444', '#c92a36', '#ff7b7b'
 ].map((color) => new THREE.Color(color));
 const foliage = [6, 7, 8, 9, 6, 7, 10, 0, 8, 9, 7, 11].map((index) => palette[index]);
 const COMPACT_SCALE = .78;
@@ -70,16 +70,20 @@ function particleField(amount, sample, animated = false) {
         vec4 mv = modelViewMatrix * vec4(p, 1.);
         gl_Position = projectionMatrix * mv;
         float outlineGlow = (1. - step(.01, distance(position, dispersed))) * drift * .30;
-        gl_PointSize = pixels * size * (.9 + shimmer * .17) * (1. + (.24 + outlineGlow) * spread);
+        gl_PointSize = max(2.0, floor(pixels * size * (.95 + shimmer * .15) * (1. + (.24 + outlineGlow) * spread)));
       }`,
     fragmentShader: `
       uniform float opacity;
       varying vec3 vTone;
       varying float shimmer;
       void main() {
-        float radius = length(gl_PointCoord - vec2(.5)) * 2.;
-        float light = .83 * exp(-radius * radius * 12.) + .29 * exp(-radius * radius * 3.);
-        light *= 1. - smoothstep(.73, 1., radius);
+        vec2 cell = floor(gl_PointCoord * 4.0) / 4.0 + 0.125;
+        vec2 d = abs(cell - vec2(0.5)) * 2.0;
+        float box = max(d.x, d.y);
+        float diamond = d.x + d.y;
+        if (diamond > 1.38) discard;
+        float core = step(box, 0.45);
+        float light = mix(0.22, 0.66, core);
         gl_FragColor = vec4(vTone, light * shimmer * opacity);
         #include <colorspace_fragment>
       }`
@@ -186,39 +190,44 @@ function crownBurst(spread) {
 }
 
 function starFlareTexture() {
-  const center = 128;
+  const size = 32;
   const flare = document.createElement('canvas');
-  flare.width = flare.height = center * 2;
+  flare.width = flare.height = size;
   const glow = flare.getContext('2d');
-  const halo = glow.createRadialGradient(center, center, 0, center, center, center);
-  halo.addColorStop(0, '#fff1b62c');
-  halo.addColorStop(.3, '#ffbd4337');
-  halo.addColorStop(.64, '#ff942615');
-  halo.addColorStop(1, '#ff942600');
-  glow.fillStyle = halo;
-  glow.fillRect(0, 0, flare.width, flare.height);
-  for (let ray = 0; ray < 8; ray++) {
-    const angle = ray * TAU / 8 - Math.PI / 2;
-    const x = Math.cos(angle);
-    const y = Math.sin(angle);
-    const length = ray % 2 ? 79 : 119;
-    const gradient = glow.createLinearGradient(center, center, center + x * length, center + y * length);
-    gradient.addColorStop(0, '#fff6cc00');
-    gradient.addColorStop(.23, ray % 2 ? '#ffdc8c88' : '#fff0aaa5');
-    gradient.addColorStop(1, '#ffe09c00');
-    glow.fillStyle = gradient;
-    glow.beginPath();
-    glow.moveTo(center - y * 1.45, center + x * 1.45);
-    glow.lineTo(center + x * length, center + y * length);
-    glow.lineTo(center + y * 1.45, center - x * 1.45);
-    glow.fill();
+  glow.imageSmoothingEnabled = false;
+  const c = size / 2;
+  const px = (x, y, w, h, color) => {
+    glow.fillStyle = color;
+    glow.fillRect(x, y, w, h);
+  };
+  // Stepped pixel glow halo
+  px(c - 7, c - 7, 14, 14, 'rgba(255, 198, 66, 0.14)');
+  px(c - 5, c - 5, 10, 10, 'rgba(255, 224, 118, 0.28)');
+  // Cardinal pixel star rays
+  px(c - 1, 1, 2, size - 2, 'rgba(255, 238, 150, 0.55)');
+  px(1, c - 1, size - 2, 2, 'rgba(255, 238, 150, 0.55)');
+  px(c - 1, 5, 2, size - 10, 'rgba(255, 249, 206, 0.85)');
+  px(5, c - 1, size - 10, 2, 'rgba(255, 249, 206, 0.85)');
+  // Diagonal pixel rays
+  for (let i = 3; i <= 9; i += 2) {
+    const alpha = Math.max(.2, .8 - i * .065);
+    const col = `rgba(255, 224, 128, ${alpha.toFixed(2)})`;
+    px(c - i - 1, c - i - 1, 2, 2, col);
+    px(c + i - 1, c - i - 1, 2, 2, col);
+    px(c - i - 1, c + i - 1, 2, 2, col);
+    px(c + i - 1, c + i - 1, 2, 2, col);
   }
+  // Bright pixel core
+  px(c - 3, c - 3, 6, 6, '#ffe57f');
+  px(c - 2, c - 2, 4, 4, '#fff9d6');
   return flare;
 }
 
 function starSprite(image, opacity, size) {
   const map = new THREE.CanvasTexture(image);
   map.colorSpace = THREE.SRGBColorSpace;
+  map.magFilter = THREE.NearestFilter;
+  map.minFilter = THREE.NearestFilter;
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
     map, opacity, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending
   }));
@@ -237,24 +246,39 @@ function photoCard(photo, index, amount) {
   const height = 1.17 / Math.sqrt(aspect);
   const canvas = document.createElement('canvas');
   canvas.width = 384;
-  canvas.height = Math.round(canvas.width * (height + .23) / width);
+  canvas.height = Math.round(canvas.width * (height + .24) / width);
   const context = canvas.getContext('2d', { alpha: false });
-  const border = 12;
-  const imageHeight = canvas.height - 52;
+  const border = 20;
+  const imageHeight = canvas.height - 64;
   const destinationAspect = (canvas.width - border * 2) / imageHeight;
   const sourceWidth = Math.min(photo.width, photo.height * destinationAspect);
   const sourceHeight = sourceWidth / destinationAspect;
-  const paper = context.createLinearGradient(0, 0, canvas.width, canvas.height);
-  paper.addColorStop(0, '#ffecce');
-  paper.addColorStop(1, '#c99857');
-  context.fillStyle = paper;
+
+  // Stardew wooden & parchment pixel frame
+  context.fillStyle = '#3b1c0c';
   context.fillRect(0, 0, canvas.width, canvas.height);
+  context.fillStyle = '#a95d28';
+  context.fillRect(6, 6, canvas.width - 12, canvas.height - 12);
+  context.fillStyle = '#fbe3b5';
+  context.fillRect(12, 12, canvas.width - 24, canvas.height - 24);
+  context.fillStyle = '#5c2d11';
+  context.fillRect(border - 4, border - 4, canvas.width - (border - 4) * 2, imageHeight + 8);
   context.drawImage(photo.image, (photo.width - sourceWidth) / 2, (photo.height - sourceHeight) / 2,
     sourceWidth, sourceHeight, border, border, canvas.width - border * 2, imageHeight);
-  context.fillStyle = '#84613d';
-  context.font = '15px Georgia';
+
+  // Corner pixel rivets
+  context.fillStyle = '#8c4a1f';
+  const corners = [
+    [14, 14], [canvas.width - 22, 14],
+    [14, canvas.height - 22], [canvas.width - 22, canvas.height - 22]
+  ];
+  for (const [cx, cy] of corners) context.fillRect(cx, cy, 8, 8);
+
+  // Tiny festive pixel holly dot + pixel index
+  context.fillStyle = '#3b1c0c';
+  context.font = 'bold 18px "Courier New", monospace';
   context.textAlign = 'center';
-  context.fillText(String(index + 1).padStart(2, '0'), canvas.width / 2, canvas.height - 13);
+  context.fillText(`#${String(index + 1).padStart(2, '0')}`, canvas.width / 2, canvas.height - 18);
 
   const angle = index * GOLDEN_ANGLE + .35;
   const heightFraction = 1 - (index + .5) / amount;
@@ -262,7 +286,7 @@ function photoCard(photo, index, amount) {
   const branchRadius = .22 + 2.85 * Math.pow(1 - heightFraction, .84);
   const orbit = 3.25 + 2.45 * Math.pow(1 - heightFraction, .88);
   return {
-    canvas, width, height: height + .23, index,
+    canvas, width, height: height + .24, index,
     destination: new THREE.Vector3(Math.cos(angle) * orbit, y * 1.12, Math.sin(angle) * orbit),
     origin: new THREE.Vector3(Math.cos(angle) * branchRadius, y, Math.sin(angle) * branchRadius),
     roll: .24 * Math.sin(angle)
@@ -300,11 +324,14 @@ function cardScale(spread, depth) {
 
 function stageFraming(width, height, presenting) {
   const aspect = width / height;
-  const viewHeight = presenting ? Math.max(11.8, 7 / aspect) : aspect < .93 ? 14.7 : 11.8;
+  const isCompactPortrait = !presenting && (aspect < .95 || width <= 768);
+  const viewHeight = presenting
+    ? Math.max(11.8, 7.2 / aspect)
+    : aspect < .78 ? 14.2 : isCompactPortrait ? 13.4 : 11.8;
   return {
     units: height / viewHeight,
     offsetX: presenting || aspect <= 1.2 ? 0 : Math.min(2.3, viewHeight * aspect * .10),
-    offsetY: presenting ? 0 : aspect < .93 ? -1.25 : -.35,
+    offsetY: presenting ? 0 : isCompactPortrait ? -.55 : -.35,
     spreadScale: Math.min(1, viewHeight * aspect / 14.4)
   };
 }
@@ -376,7 +403,10 @@ export function createScene(host) {
     homeX = framing.offsetX;
     homeY = framing.offsetY;
     cloudScale = framing.spreadScale;
-    for (const field of [sky, floor, tree, crownLights, crownDust]) field.material.uniforms.pixels.value = pixelRatio;
+    const sizeScale = clamp(Math.min(width, height) / 620, .54, 1);
+    for (const field of [sky, floor, tree, crownLights, crownDust]) {
+      field.material.uniforms.pixels.value = pixelRatio * sizeScale;
+    }
   }
   new ResizeObserver(resize).observe(host);
   resize();
@@ -504,15 +534,14 @@ function createCanvasScene(host) {
   const flare = starFlareTexture();
   const dots = new Map(palette.map((color) => {
     const dot = document.createElement('canvas');
-    dot.width = dot.height = 24;
+    dot.width = dot.height = 16;
     const ctx = dot.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
     const hex = color.getHexString();
-    const light = ctx.createRadialGradient(12, 12, 0, 12, 12, 12);
-    light.addColorStop(0, `#${hex}ff`);
-    light.addColorStop(.38, `#${hex}77`);
-    light.addColorStop(1, `#${hex}00`);
-    ctx.fillStyle = light;
-    ctx.fillRect(0, 0, 24, 24);
+    ctx.fillStyle = `#${hex}77`;
+    ctx.fillRect(2, 2, 12, 12);
+    ctx.fillStyle = `#${hex}ff`;
+    ctx.fillRect(4, 4, 8, 8);
     return [color, dot];
   }));
 
