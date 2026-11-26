@@ -27,19 +27,22 @@ export function startCamera({ onReady, onHand, onError }) {
   const video = document.createElement('video');
   video.muted = true;
   video.playsInline = true;
+  const usesVideoFrames = typeof video.requestVideoFrameCallback === 'function';
+  const scheduleFrame = usesVideoFrames ? video.requestVideoFrameCallback.bind(video) : requestAnimationFrame;
+  const cancelFrame = usesVideoFrames ? video.cancelVideoFrameCallback.bind(video) : cancelAnimationFrame;
   let stream;
   let tracker;
   let cancelled = false;
   let frameId;
   let lastFrame = -1;
-  let lastScan = 0;
+  let lastScan = -Infinity;
   let wasPinching = false;
   const stabilize = stabilizePose();
 
   function stop() {
     if (cancelled) return;
     cancelled = true;
-    cancelAnimationFrame(frameId);
+    cancelFrame(frameId);
     stream?.getTracks().forEach((track) => track.stop());
     video.srcObject = null;
     tracker?.close();
@@ -53,19 +56,20 @@ export function startCamera({ onReady, onHand, onError }) {
 
   function scan(now) {
     if (cancelled) return;
-    if (video.readyState >= 2 && video.currentTime !== lastFrame && now - lastScan >= 29) {
+    const freshFrame = usesVideoFrames || (video.currentTime !== lastFrame && now - lastScan >= 24);
+    if (video.readyState >= 2 && freshFrame) {
       lastScan = now;
       lastFrame = video.currentTime;
       try {
         const hand = readHand(tracker.detectForVideo(video, now).landmarks[0], wasPinching);
         wasPinching = hand?.pose === 'pinch';
-        onHand(hand, stabilize(hand?.pose ?? 'neutral'), now);
+        onHand(hand, stabilize(hand?.pose ?? 'neutral', hand?.decisive), now);
       } catch (error) {
         fail(error);
         return;
       }
     }
-    frameId = requestAnimationFrame(scan);
+    frameId = scheduleFrame(scan);
   }
 
   async function initialize() {
@@ -93,7 +97,7 @@ export function startCamera({ onReady, onHand, onError }) {
         return;
       }
       onReady();
-      frameId = requestAnimationFrame(scan);
+      frameId = scheduleFrame(scan);
     } catch (error) {
       fail(error);
     }

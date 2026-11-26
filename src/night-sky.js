@@ -1,6 +1,7 @@
 const SKY_WIDTH = 400;
 const SKY_HEIGHT = 240;
 const TAU = 2 * Math.PI;
+const RAIN_SPEED = .54;
 
 function texture(width, height) {
   const canvas = document.createElement('canvas');
@@ -72,7 +73,7 @@ export function createNightSky() {
     return {
       x: Math.random(),
       offset: Math.random(),
-      speed: (.21 + Math.random() * .16) * (1 + depth * .46),
+      speed: RAIN_SPEED * (.21 + Math.random() * .16) * (1 + depth * .46),
       length: (35 + Math.random() * 66) * (1 + depth * .54),
       depth,
       opacity: .38 + Math.random() * .59

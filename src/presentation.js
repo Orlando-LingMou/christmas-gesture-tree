@@ -27,6 +27,8 @@ export function createPresentationEffects(canvas, greeting) {
   let height = 0;
   let ratio = 1;
   let frame;
+  let lastDraw = -Infinity;
+  const skyFrameInterval = 1000 / 30;
   let sparks = [];
   let burstTime = 0;
 
@@ -38,7 +40,7 @@ export function createPresentationEffects(canvas, greeting) {
     canvas.width = Math.round(width * ratio);
     canvas.height = Math.round(height * ratio);
     context.setTransform(ratio, 0, 0, ratio, 0, 0);
-    if (reducedMotion.matches) draw(performance.now());
+    draw(performance.now());
   }
   new ResizeObserver(resize).observe(canvas);
 
@@ -87,7 +89,14 @@ export function createPresentationEffects(canvas, greeting) {
     }
     context.globalAlpha = 1;
     context.globalCompositeOperation = 'source-over';
-    if (!still) frame = requestAnimationFrame(draw);
+  }
+
+  function tick(now) {
+    if (now - lastDraw >= skyFrameInterval - 1) {
+      lastDraw = now;
+      draw(now);
+    }
+    frame = requestAnimationFrame(tick);
   }
 
   function setPresentation(enabled) {
@@ -97,10 +106,11 @@ export function createPresentationEffects(canvas, greeting) {
   }
 
   resize();
-  if (!reducedMotion.matches) frame = requestAnimationFrame(draw);
+  if (!reducedMotion.matches) frame = requestAnimationFrame(tick);
   reducedMotion.addEventListener('change', () => {
     cancelAnimationFrame(frame);
     draw(performance.now());
+    if (!reducedMotion.matches) frame = requestAnimationFrame(tick);
   });
 
   function burstGreeting() {

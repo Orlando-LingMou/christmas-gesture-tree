@@ -11,6 +11,10 @@ const palette = [
 ].map((color) => new THREE.Color(color));
 const foliage = [6, 7, 8, 9, 6, 7, 10, 0, 8, 9, 7, 11].map((index) => palette[index]);
 const COMPACT_SCALE = .78;
+const SCATTER_RESPONSE = 14;
+const REGROUP_RESPONSE = 10;
+const SCATTER_TURN_RESPONSE = 26;
+const PHOTO_FOCUS_SPREAD = .33;
 
 function particleField(amount, sample, animated = false) {
   const positions = [];
@@ -404,7 +408,7 @@ export function createScene(host) {
   }
 
   function targetPhoto(previous) {
-    if (mode !== 'scatter' || spread < .45) return undefined;
+    if (mode !== 'scatter' || spread < PHOTO_FOCUS_SPREAD) return undefined;
     const width = host.clientWidth;
     const height = host.clientHeight;
     const position = new THREE.Vector3();
@@ -432,7 +436,7 @@ export function createScene(host) {
     if (document.hidden) return;
     const duration = reducedMotion.matches ? .05 : elapsed;
     const isScatter = mode === 'scatter';
-    const motion = reducedMotion.matches ? 24 : isScatter ? 7.5 : 6;
+    const motion = reducedMotion.matches ? 24 : isScatter ? SCATTER_RESPONSE : REGROUP_RESPONSE;
     if (!reducedMotion.matches) {
       clock += elapsed;
       if (!isScatter) targetY += elapsed * .19;
@@ -445,7 +449,7 @@ export function createScene(host) {
     const shimmer = starShimmer(clock);
     starFlare.material.opacity = shimmer;
     starFlare.scale.setScalar(3.08 + .61 * shimmer);
-    const turnSpeed = isScatter ? 15 : 6;
+    const turnSpeed = isScatter ? SCATTER_TURN_RESPONSE : 6;
     cloud.rotation.y = damp(cloud.rotation.y, targetY, turnSpeed, duration);
     cloud.rotation.x = damp(cloud.rotation.x, targetX, turnSpeed, duration);
     inverseRotation.copy(cloud.quaternion).invert();
@@ -532,8 +536,8 @@ function createCanvasScene(host) {
       if (mode === 'tree') targetY += elapsed * .19;
     }
     const isScatter = mode === 'scatter';
-    spread = damp(spread, isScatter ? 1 : 0, still ? 22 : isScatter ? 7.5 : 6, duration);
-    const turnSpeed = isScatter ? 15 : 6;
+    spread = damp(spread, isScatter ? 1 : 0, still ? 22 : isScatter ? SCATTER_RESPONSE : REGROUP_RESPONSE, duration);
+    const turnSpeed = isScatter ? SCATTER_TURN_RESPONSE : 6;
     x = damp(x, targetX, turnSpeed, duration);
     y = damp(y, targetY, turnSpeed, duration);
     rotation.set(x, y, 0);
@@ -640,7 +644,7 @@ function createCanvasScene(host) {
       })?.index;
     },
     targetPhoto(previous) {
-      if (mode !== 'scatter' || spread < .45) return undefined;
+      if (mode !== 'scatter' || spread < PHOTO_FOCUS_SPREAD) return undefined;
       return focusTarget(positionedCards, width, height, previous);
     }
   };

@@ -15,20 +15,25 @@ export function readHand(landmarks, wasPinching = false) {
     const length = distance(landmarks[base], landmarks[joint]) + distance(landmarks[joint], landmarks[tip]);
     return reach > length * .78 && distance(wrist, landmarks[tip]) > distance(wrist, landmarks[joint]) + palm * .08;
   });
-  const otherFingers = extended.slice(1).filter(Boolean).length;
+  const otherFingers = Number(extended[1]) + Number(extended[2]) + Number(extended[3]);
   const thumb = landmarks[4];
   const index = landmarks[8];
   const gap2D = Math.hypot(thumb.x - index.x, thumb.y - index.y) / palm;
   const depth = Math.abs((thumb.z ?? 0) - (index.z ?? 0)) / palm;
   let pose = 'neutral';
   if (otherFingers >= 1 && gap2D < (wasPinching ? .4 : .29) && depth < .35) pose = 'pinch';
-  else if (extended.filter(Boolean).length >= 3) pose = 'open';
+  else if (otherFingers + Number(extended[0]) >= 3) pose = 'open';
   else if (otherFingers === 0 && !extended[0] && distance(index, wrist) < palm * 1.45) pose = 'fist';
+
+  // Borderline poses still need consecutive frames to avoid triggering on a passing hand.
+  const decisive = (pose === 'open' && extended[0] && otherFingers === 3 && gap2D >= .60)
+    || (pose === 'pinch' && otherFingers >= 2 && gap2D < .18 && depth < .25);
 
   const palmX = palmPoints.reduce((sum, point) => sum + landmarks[point].x, 0) / palmPoints.length;
   const palmY = palmPoints.reduce((sum, point) => sum + landmarks[point].y, 0) / palmPoints.length;
   return {
     pose,
+    decisive,
     x: Math.max(-1, Math.min(1, (.5 - palmX) * 2)),
     y: Math.max(-1, Math.min(1, (.5 - palmY) * 2))
   };
@@ -38,13 +43,14 @@ export function stabilizePose() {
   let candidate = 'neutral';
   let stable = 'neutral';
   let frames = 0;
-  return (pose) => {
+  return (pose, decisive = false) => {
     if (pose === candidate) frames++;
     else {
       candidate = pose;
       frames = 1;
     }
-    const required = pose === 'pinch' || pose === 'open' ? 2 : 3;
+    const quickPose = pose === 'pinch' || pose === 'open';
+    const required = quickPose && decisive ? 1 : 2;
     if (frames >= required && stable !== candidate) {
       stable = candidate;
       return stable;
